@@ -1,0 +1,842 @@
+---
+title: |
+  | SDMA - TP4
+  | Agrégation de modèles
+  | Analyse spectrale et clustering
+  
+author: "Maha ELBAYAD"
+date: "23 Décembre 2015"
+header-includes:
+   - \usepackage{multicol,float,graphicx}
+   - \newcommand{\bcol}{\begin{multicols}{2} \center}
+   - \newcommand{\ecol}{\end{multicols}}
+output:
+  pdf_document:
+    highlight: pygments
+---
+
+```{r, echo=FALSE,include=FALSE}
+library(xtable)
+options(xtable.comment = FALSE)
+options(xtable.table.placement = "H")
+colors=c('blue4','indianred4','mediumseagreen','darkgoldenrod1','salmon','deepskyblue','deeppink3')
+#------------
+#  Librairies
+#------------
+library(rpart)
+library(ipred)
+library(randomForest)
+library(MASS)
+library(e1071)
+library(lattice)
+library(ade4)
+
+#-----------------------
+# Fonctions auxiliaires
+#-----------------------
+
+pretty_print <- function(confusion.matrix){
+  temp=rbind(colnames(confusion.matrix),confusion.matrix)
+  #rownames(confusion.matrix)[1]="pred/true"
+  temp=cbind(rownames(temp),temp)
+  temp=rbind(c("","\\textbf{True}",""),temp)
+  temp=cbind(c("","","\\textbf{Pred}",""),temp)
+  print(xtable(temp,align="c|c|ccc|"),include.rownames=F,include.colnames=F,hline.after =c(0,1,nrow(temp)),sanitize.text.function = force)
+}
+```
+
+#Agrégation des modèles
+##Analyse préliminaire
+
+```{r, include=FALSE}
+mail = read.table('spam.txt',header=T,sep=';')
+ind= read.table('indtrain.txt',header=T)$indtrain
+train=mail[ind,]
+test=mail[-ind,]
+```
+On dispose pour cette étude de `r nrow(mail)` observations avec `r ncol(mail)` variables.
+D'après \texttt{spambasenames.txt}:
+
+- A1:55 numériques à valeurs flottantes:
+
+    - A1:48 \texttt{word\_freq\_WORD} i.e fréquence des mots \texttt{WORD} dans le mail.
+
+    - A49:54 \texttt{char\_freq\_CHAR}, fréquence du caractère \texttt{CHAR} dans le mail, l'étude s'interesse ici aux carctères spéciaux $\{; ( [ ! \# \$\}$
+
+    - A55 longueur moyenne des séquences toutes en majuscules
+
+- A56:57 numériques entières:
+
+  - A56 la longueur maximale d'une séquence toute en majuscules
+  
+  - A57 le nombre total des lettres majuscules dans l'email
+
+- spam: catégorique indiquant si le mail en question est un spam (1) ou pas (0).
+
+## Arbres de Classification
+```{r,echo=F,fig.width=12}
+tree.spam=rpart(spam~.,data=train)
+tree.spam.info=rpart(spam~.,data=train,parms=list(split = "information"))
+#summary(tree.spam)
+#printcp(tree.spam)
+
+#summary(tree.spam.info)
+#printcp(tree.spam.info)
+
+par(mfrow=c(1,2))
+plot(tree.spam,uniform=T,margin=.05,main='Gini',adj=.62)
+text(tree.spam,col='blue4')
+
+plot(tree.spam.info,uniform=T,margin=.05,main='Information',adj=.7)
+text(tree.spam.info,col='blue4')
+```
+
+La variable la plus influente est \texttt{A53} qui correspond à la fréquence du caractère \texttt{\$} dans l'email.
+
+Seules 5 ou 6 variables interviennent dans cet arbre:
+
+- Gini \texttt{A.25 A.52 A.53 A.57 A.7}: correspondant aux mots/caractètres: hp, !, $, remove et le nombre total des lettres majuscules.
+
+- Entropie \texttt{A.16 A.25 A.52 A.53 A.55 A.7}: correspondant aux mots/caractètres: free, hp, remove, !, $, remove et la longueur moyenne des séquences toutes en majuscules.
+
+
+###Erreur de classification - Gini
+```{r,include=F,echo=F}
+train.pred=predict(tree.spam,train,type="class")
+train.confusion=table(pred=train.pred ,true=train$spam)
+test.pred=predict(tree.spam,test,type="class")
+test.confusion=table(pred=test.pred ,true=test$spam)
+```
+
+\bcol
+
+###Base d'apprentissage:
+
+```{r, echo=FALSE,results='asis',warning=FALSE}
+#pretty_print(train.confusion)
+err=1-sum(diag(train.confusion))/sum(train.confusion)
+fp=train.confusion[1,2]/sum(train.confusion[,2])
+fn=train.confusion[2,1]/sum(train.confusion[,1])
+```
+
+L'erreur de classification: **`r signif(err*100,3)`%**
+
+Taux des fausses alarames: **`r signif(fp*100,3)`%**
+
+Taux des non-detections: **`r signif(fn*100,3)`%**
+
+###Base de test:
+
+```{r, echo=FALSE,results='asis',warning=FALSE}
+#pretty_print(test.confusion)
+err=1-sum(diag(test.confusion))/sum(test.confusion)
+fp=test.confusion[1,2]/sum(test.confusion[,2])
+fn=test.confusion[2,1]/sum(test.confusion[,1])
+```
+
+L'erreur de classification: **`r signif(err*100,3)`%**
+
+Taux des fausses alarames: **`r signif(fp*100,3)`%**
+
+Taux des non-detections: **`r signif(fn*100,3)`%**
+
+\ecol
+
+###Erreur de classification - Information/Entropie
+```{r,include=F,echo=F}
+train.pred=predict(tree.spam.info,train,type="class")
+train.confusion=table(pred=train.pred ,true=train$spam)
+test.pred=predict(tree.spam.info,test,type="class")
+test.confusion=table(pred=test.pred ,true=test$spam)
+```
+
+\bcol
+
+###Base d'apprentissage:
+
+```{r, echo=FALSE,results='asis',warning=FALSE}
+pretty_print(train.confusion)
+err=1-sum(diag(train.confusion))/sum(train.confusion)
+fp=train.confusion[1,2]/sum(train.confusion[,2])
+fn=train.confusion[2,1]/sum(train.confusion[,1])
+temp=c('CART',err,fp,fn)
+```
+
+L'erreur de classification: **`r signif(err*100,3)`%**
+
+Taux des fausses alarames: **`r signif(fp*100,3)`%**
+
+Taux des non-detections: **`r signif(fn*100,3)`%**
+
+###Base de test:
+
+```{r, echo=FALSE,results='asis',warning=FALSE}
+pretty_print(test.confusion)
+err=1-sum(diag(test.confusion))/sum(test.confusion)
+fp=test.confusion[1,2]/sum(test.confusion[,2])
+fn=test.confusion[2,1]/sum(test.confusion[,1])
+temp=c(temp,err,fp,fn)
+recap=temp
+```
+
+L'erreur de classification: **`r signif(err*100,3)`%**
+
+Taux des fausses alarames: **`r signif(fp*100,3)`%**
+
+Taux des non-detections: **`r signif(fn*100,3)`%**
+
+\ecol
+
+###Conclusion:
+On constate que la perfomance des arbres de classification est limitée. De plus la construction de l'arbre dépend fortement des données d'apprentissage d'où l'intérêt de considèrer des approches plus robustes comme le bagging ou le boosting.
+
+##Agrégation de modèles: Bagging
+
+La fonction \texttt{bagging} de la libraire \texttt{ipred} génère par défaut 25 arbres.
+
+\bcol 
+
+###Base d'apprentissage:
+```{r,echo=F}
+bag.spam=bagging(spam~.,data=train)
+train.pred=predict(bag.spam,train)
+train.confusion=table(pred=train.pred ,true=train$spam)
+test.pred=predict(bag.spam,test,type="class")
+test.confusion=table(pred=test.pred ,true=test$spam)
+```
+
+```{r, echo=FALSE,results='asis',warning=FALSE}
+pretty_print(train.confusion)
+err=1-sum(diag(train.confusion))/sum(train.confusion)
+fp=train.confusion[1,2]/sum(train.confusion[,2])
+fn=train.confusion[2,1]/sum(train.confusion[,1])
+temp=c('Bagging',err,fp,fn)
+```
+
+L'erreur de classification: **`r signif(err*100,3)`%**
+
+Taux des fausses alarames: **`r signif(fp*100,3)`%**
+
+Taux des non-detections: **`r signif(fn*100,3)`%**
+
+###Base de test:
+
+```{r, echo=FALSE,results='asis',warning=FALSE}
+pretty_print(test.confusion)
+err=1-sum(diag(test.confusion))/sum(test.confusion)
+fp=test.confusion[1,2]/sum(test.confusion[,2])
+fn=test.confusion[2,1]/sum(test.confusion[,1])
+temp=c(temp,err,fp,fn)
+recap=rbind(recap,temp)
+```
+
+L'erreur de classification: **`r signif(err*100,3)`%**
+
+Taux des fausses alarames: **`r signif(fp*100,3)`%**
+
+Taux des non-detections: **`r signif(fn*100,3)`%**
+
+\ecol
+
+###Conslusion: 
+La performance avec un bagging de 25 arbres est remarquablement meilleure que celle d'un seul arbre.
+
+##Agrégation de modèles: Random Forest
+
+Par défaul \texttt{randomForest()} génère 500 arbres en bootstrappant les données d'apprentissage, on va se limiter à ntree=25. La fonction choisit aléatoirement $\sqrt p\approx 7$ variables à considérer pour chaque split.
+\bcol
+
+###Base d'apprentissage:
+
+```{r,echo=F}
+rforest.spam=randomForest(spam~.,data=train,importance=T,ntree=50)
+train.pred=predict(rforest.spam,train)
+train.confusion=table(pred=train.pred ,true=train$spam)
+test.pred=predict(rforest.spam,test,type="class")
+test.confusion=table(pred=test.pred ,true=test$spam)
+```
+
+```{r, echo=FALSE,results='asis',warning=FALSE}
+pretty_print(train.confusion)
+err=1-sum(diag(train.confusion))/sum(train.confusion)
+fp=train.confusion[1,2]/sum(train.confusion[,2])
+fn=train.confusion[2,1]/sum(train.confusion[,1])
+temp=c('RF',err,fp,fn)
+```
+
+L'erreur de classification: **`r signif(err*100,3)`%**
+
+Taux des fausses alarames: **`r signif(fp*100,3)`%**
+
+Taux des non-detections: **`r signif(fn*100,3)`%**
+
+###Base de test:
+
+```{r, echo=FALSE,results='asis',warning=FALSE}
+pretty_print(test.confusion)
+err=1-sum(diag(test.confusion))/sum(test.confusion)
+fp=test.confusion[1,2]/sum(test.confusion[,2])
+fn=test.confusion[2,1]/sum(test.confusion[,1])
+temp=c(temp,err,fp,fn)
+recap=rbind(recap,temp)
+```
+
+L'erreur de classification: **`r signif(err*100,3)`%**
+
+Taux des fausses alarames: **`r signif(fp*100,3)`%**
+
+Taux des non-detections: **`r signif(fn*100,3)`%**
+
+\ecol
+
+###L'importance des variables
+
+```{r,echo=F,fig.width=12,fig.height=8,fig.align='center'}
+varImpPlot(rforest.spam,pch='+',color=colors[1:2],main='')
+```
+
+###Conslusion: 
+Les variables les plus importantes de l'arbre de décision (CART): \texttt{A.53, A.7,  A.52, A.57, A.25} figurent dans les 10 les plus importantes du Random Forest avec un ordre différent vu le bootstrapping des données d'apprentissage.
+
+Côté performance, Random Forest se généralise mieux que le bagging avec 25 arbres.
+
+##Scoring: comparaison des modèles de classification
+
+\bcol
+
+###Base d'apprentissage - Logit:
+
+```{r,echo=F,warning=FALSE}
+train.logit=train
+test.logit=test
+train.logit$spam=as.numeric(train.logit$spam)-1
+test.logit$spam=as.numeric(test.logit$spam)-1
+logit.spam=glm(spam~.,train.logit,family=binomial(link = "logit"))
+train.pred=as.numeric(predict(logit.spam,train.logit,type='response')>.5)
+train.confusion=table(pred=train.pred ,true=train.logit$spam)
+rownames(train.confusion)=c('mail','spam')
+colnames(train.confusion)=c('mail','spam')
+```
+
+```{r, echo=FALSE,results='asis',warning=FALSE}
+pretty_print(train.confusion)
+err=1-sum(diag(train.confusion))/sum(train.confusion)
+fp=train.confusion[1,2]/sum(train.confusion[,2])
+fn=train.confusion[2,1]/sum(train.confusion[,1])
+temp1=c('logit',err,fp,fn)
+```
+
+L'erreur de classification: **`r signif(err*100,3)`%**
+
+Taux des fausses alarames: **`r signif(fp*100,3)`%**
+
+Taux des non-detections: **`r signif(fn*100,3)`%**
+
+###Base d'apprentissage - LDA:
+
+```{r,echo=F}
+lda.spam=lda(spam~.,data=train)
+train.pred=predict(lda.spam,train)$class
+train.confusion=table(pred=train.pred ,true=train$spam)
+```
+
+```{r, echo=FALSE,results='asis',warning=FALSE}
+pretty_print(train.confusion)
+err=1-sum(diag(train.confusion))/sum(train.confusion)
+fp=train.confusion[1,2]/sum(train.confusion[,2])
+fn=train.confusion[2,1]/sum(train.confusion[,1])
+temp2=c('LDA',err,fp,fn)
+```
+
+L'erreur de classification: **`r signif(err*100,3)`%**
+
+Taux des fausses alarames: **`r signif(fp*100,3)`%**
+
+Taux des non-detections: **`r signif(fn*100,3)`%**
+
+###Base d'apprentissage - SVM:
+
+```{r,echo=F}
+svm.spam=svm(spam~.,train)
+train.pred=predict(svm.spam,train)
+train.confusion=table(pred=train.pred ,true=train$spam)
+```
+
+```{r, echo=FALSE,results='asis',warning=FALSE}
+pretty_print(train.confusion)
+err=1-sum(diag(train.confusion))/sum(train.confusion)
+fp=train.confusion[1,2]/sum(train.confusion[,2])
+fn=train.confusion[2,1]/sum(train.confusion[,1])
+temp3=c('SVM',err,fp,fn)
+```
+
+L'erreur de classification: **`r signif(err*100,3)`%**
+
+Taux des fausses alarames: **`r signif(fp*100,3)`%**
+
+Taux des non-detections: **`r signif(fn*100,3)`%**
+
+
+###Base de test - Logit:
+
+```{r, echo=FALSE,results='asis',warning=FALSE}
+test.pred=as.numeric(predict(logit.spam,test.logit,type='response')>.5)
+test.confusion=table(pred=test.pred ,true=test.logit$spam)
+rownames(test.confusion)=c('mail','spam')
+colnames(test.confusion)=c('mail','spam')
+pretty_print(test.confusion)
+err=1-sum(diag(test.confusion))/sum(test.confusion)
+fp=test.confusion[1,2]/sum(test.confusion[,2])
+fn=test.confusion[2,1]/sum(test.confusion[,1])
+temp1=c(temp1,err,fp,fn)
+```
+
+L'erreur de classification: **`r signif(err*100,3)`%**
+
+Taux des fausses alarames: **`r signif(fp*100,3)`%**
+
+Taux des non-detections: **`r signif(fn*100,3)`%**
+
+###Base de test - LDA:
+
+```{r, echo=FALSE,results='asis',warning=FALSE}
+test.pred=predict(lda.spam,test)$class
+test.confusion=table(pred=test.pred ,true=test$spam)
+pretty_print(test.confusion)
+err=1-sum(diag(test.confusion))/sum(test.confusion)
+fp=test.confusion[1,2]/sum(test.confusion[,2])
+fn=test.confusion[2,1]/sum(test.confusion[,1])
+temp2=c(temp2,err,fp,fn)
+```
+
+L'erreur de classification: **`r signif(err*100,3)`%**
+
+Taux des fausses alarames: **`r signif(fp*100,3)`%**
+
+Taux des non-detections: **`r signif(fn*100,3)`%**
+
+
+###Base de test - SVM:
+
+```{r, echo=FALSE,results='asis',warning=FALSE}
+test.pred=predict(svm.spam,test)
+test.confusion=table(pred=test.pred ,true=test$spam)
+pretty_print(test.confusion)
+err=1-sum(diag(test.confusion))/sum(test.confusion)
+fp=test.confusion[1,2]/sum(test.confusion[,2])
+fn=test.confusion[2,1]/sum(test.confusion[,1])
+temp3=c(temp3,err,fp,fn)
+```
+
+L'erreur de classification: **`r signif(err*100,3)`%**
+
+Taux des fausses alarames: **`r signif(fp*100,3)`%**
+
+Taux des non-detections: **`r signif(fn*100,3)`%**
+
+\ecol
+
+##Conclusion
+```{r, echo=F,results='asis',warning=FALSE}
+recap=rbind(recap,temp1,temp2,temp3)
+recap[,2:7]=signif(as.numeric(recap[,2:7])*100,3)
+colnames(recap)=c('Modèle','Train: Erreur\\%','FP\\%','FN\\%','Test: Erreur\\%','FP\\%','FN\\%')
+high=apply(recap,2,which.min)
+for (i in 1:length(high)){
+  recap[as.numeric(high[i]),i]=paste('\\color{red}',recap[as.numeric(high[i]),i])
+}
+print(xtable(recap,align="c|c|ccc|ccc|"),include.rownames=F,include.colnames=T,hline.after =c(-1,0,nrow(recap)),sanitize.text.function = force)
+```
+
+On constate que le Random Forest et le Bagging surpassent de loin les méthodes classqqiues telles le LDA et la régression logistiques (sans cross-validation pour tuner les modèles)
+
+
+##Comparaison des modèles de classification
+```{r,echo=F,warning=FALSE,fig.align='center',fig.width=8}
+#Répartition train-test:
+K=20
+set.seed(117)
+ETrain=matrix(nr=6,ncol=K)
+ETest=matrix(nr=6,ncol=K)
+
+for(k in 1:K){
+ind=sample(nrow(mail),floor(nrow(mail)*.75))
+train=mail[ind,]
+test=mail[-ind,]
+train.logit=train
+test.logit=test
+train.logit$spam=as.numeric(train.logit$spam)-1
+test.logit$spam=as.numeric(test.logit$spam)-1
+#Modèles:
+#tree.spam=rpart(spam~.,data=train,method="class",parms=list(split = "information"))
+tree.spam=rpart(spam~.,data=train,method="class")
+bag.spam=bagging(spam~.,data=train)
+rforest.spam=randomForest(spam~.,data=train,importance=T,ntree=50)
+svm.spam=svm(spam~.,train)
+lda.spam=lda(spam~.,data=train)
+logit.spam=glm(spam~.,train.logit,family=binomial(link = "logit"))
+
+
+#Tree:
+train.pred=predict(tree.spam.info,train,type="class")
+test.pred=predict(tree.spam.info,test,type="class")
+ETrain[1,k]=sum(train.pred!=train$spam)/length(train.pred)
+ETest[1,k]=sum(test.pred!=test$spam)/length(test.pred)
+
+#Bagging:
+train.pred=predict(bag.spam,train)
+test.pred=predict(bag.spam,test,type="class")
+ETrain[2,k]=sum(train.pred!=train$spam)/length(train.pred)
+ETest[2,k]=sum(test.pred!=test$spam)/length(test.pred)
+
+#RForest:
+train.pred=predict(rforest.spam,train)
+test.pred=predict(rforest.spam,test,type="class")
+ETrain[3,k]=sum(train.pred!=train$spam)/length(train.pred)
+ETest[3,k]=sum(test.pred!=test$spam)/length(test.pred)
+
+#SVM:
+train.pred=predict(svm.spam,train)
+test.pred=predict(svm.spam,test)
+ETrain[4,k]=sum(train.pred!=train$spam)/length(train.pred)
+ETest[4,k]=sum(test.pred!=test$spam)/length(test.pred)
+
+#Logit:
+train.pred=as.numeric(predict(logit.spam,train.logit,type='response')>.5)
+test.pred=as.numeric(predict(logit.spam,test,type='response')>.5)
+ETrain[5,k]=sum(train.pred!=train.logit$spam)/length(train.pred)
+ETest[5,k]=sum(test.pred!=test.logit$spam)/length(test.pred)
+
+#LDA:
+train.pred=predict(lda.spam,train)$class
+test.pred=predict(lda.spam,test)$class
+ETrain[6,k]=sum(train.pred!=train$spam)/length(train.pred)
+ETest[6,k]=sum(test.pred!=test$spam)/length(test.pred)
+}
+rownames(ETrain)=c('CART','Bagging','Forest','SVM','Logit','LDA')
+rownames(ETest)=c('CART','Bagging','Forest','SVM','Logit','LDA')
+bx=boxplot(t(ETrain*100),main=paste('Train - K=',K))
+boxplot(t(ETest*100),main=paste('Train - K=',K))
+```
+
+```{r,results='asis',echo=F}
+temp=signif(rbind(apply(ETrain,1,mean)*100,apply(ETrain,1,sd)*100,apply(ETest,1,mean)*100,apply(ETest,1,sd)*100),3)
+rownames(temp)=c('Moyenne -Train \\%','Ecart-type -Train \\%','Moyenne -Test \\%','Ecart-type -Test \\%')
+high=apply(temp,1,which.min)
+for (i in 1:length(high)){
+  temp[i,as.numeric(high[i])]=paste('\\color{red}',temp[i,as.numeric(high[i])])
+}
+print(xtable(temp,align="|c|cccccc|"),include.rownames=T,include.colnames=T,sanitize.text.function = force)
+```
+
+
+#Analyse spectrale et clustering
+##Exercice 1
+
+```{r,echo=F,fig.width=3,fig.height=3,fig.align='center'}
+n=50
+p=5
+X=matrix(rnorm(n*p,mean=0,sd=1), nr=n)
+S=cov(X)
+levelplot(S,col.regions=topo.colors(20),xlab=NULL, ylab=NULL)
+```
+On remarque que les variables $X_1..X_p$ sont corrélées.
+
+On décompose $S$ sous la forme $S=U\Sigma V^T$ où $U,V$ deux matrices unitaires et $\Sigma$ matrice diagonale à éléments diagonaux positifs. On compare les deux matrices $U$ et $V$ en évaluant la norme de leur différence, on choisit ici la norme de Frobenius. 
+On peut aussi évaluer les valeurs propres de $U-V$ et calculer leur norme .
+```{r,echo=F}
+svd.S=svd(S)
+U=svd.S$u
+V=svd.S$v
+Sigma=diag(svd.S$d)
+eig=eigen(U-V)$values
+```
+
+$$\dfrac{|U-V|_F}{|U|_F}=`r signif(sqrt(sum(diag((U-V)%*%t(U-V)))/sum(diag(U%*%t(U)))),5)`$$
+et 
+$$|\sigma(U-V)|_2=`r sqrt(sum(eig^2))`$$
+On remarque que:
+$$Tr(\Sigma-S)=`r sum(diag(Sigma-S))`$$
+Comme la matrice $S\in\mathbf S^p_{++}$, la décomposition en valeurs singulières est équivalente à la décompision en vecteurs propres.
+Ainsi:
+$$\Sigma=\Lambda=diag(\sigma(S))$$
+et $$U=V$$
+On peut donc écrire
+$$S=U\Lambda U^T$$
+Numériquement:
+$$|S-U\Sigma V^T|_F=`r norm(S-U%*%Sigma%*%t(V),"F")`$$
+
+##Exercice 2: Analyse en composantes principales
+###Préliminaires:
+
+En analysant le contenu de \texttt{cardata.txt}, on constate qu'on dispose de 24 observations de 6 variables et qu'on ne dispose pas d'une variable cible. La commande \texttt{plot} affiche des nuages de points entre les 6 variables.
+
+```{r,echo=F,fig.height=6,fig.width=6,fig.align='center'}
+X=read.table('cardata.txt',sep=';',header=T,row.names ='model')
+#nrow(X); ncol(X)
+#Corrélation:
+C=round(cor(X),2)
+C[upper.tri(C, diag = FALSE)]=""
+I=which((as.numeric(C) > .88 | -as.numeric(C)>.88) & C!=1,arr.ind = TRUE);
+C[I]=paste('\\textbf{ ',C[I],'}');
+
+plot(X,col='blue4',pch=18,cex=.7)
+```
+
+```{r, results='asis',echo=FALSE}
+print(xtable(C,align=rep("c",7)),sanitize.text.function = force)
+```
+On remarque que les variables \texttt{(puiss,vit),(poids,cylind),(poids,long)} sont fortement corrélées.
+
+###ACP:
+On effectue une analyse en composantes principales sur les variables centrées réduites. La sortie de \texttt{prcomp} a les attributs suivants:
+
+```{r,echo=F}
+#Variables centrées réduites:
+Xcr=apply(X,2,function(x){(x-mean(x))/sd(x)})
+#Pour sauvegarder les modifs:
+means=as.matrix(colMeans(X))
+sds=as.matrix(apply(X,2,sd))
+res=prcomp(Xcr,center=F,scale=F)
+#res$sdev
+#res$rotation
+# res$center
+# res$scale
+# res$x
+```
+
+- \texttt{sdev}:
+
+    la déviation des composantes principales i.e., $\sqrt{\lambda_i(cor(X))}$.
+
+- \texttt{rotation}:
+
+    Matrices des composantes principales ~ vecteurs propres.
+
+- \texttt{center, scale}: 
+
+    Les paramètres de centrage et de redimensionnement ou le booléan FALSE si on précise \texttt{center=F,scale=F}
+
+- \texttt{x}:
+
+    La projection des données d'entrée sur l'espace des PC.
+    
+###Etude des Valeurs propres:
+```{r,echo=F,fig.height=3,fig.width=4,fig.align='center'}
+valpr=(res$sdev)^2
+#Eboulis des valeurs propres
+plot(valpr,type='o',pch='x',lwd=2,col='blue4',xlab='i',ylab=expression(lambda))
+var_PC=t(as.matrix(valpr/sum(valpr)*100))
+var_PC=rbind(var_PC,cumsum(valpr/sum(valpr))*100)
+colnames(var_PC)=paste("$\\lambda_",1:6,"$",sep="")
+rownames(var_PC)=c("Var par axe\\%","Var par plan\\%")
+```
+
+###Variance expliquée par chaque axe principal i et chaque plan {1..i}:
+```{r, results='asis',echo=FALSE}
+print(xtable(var_PC,align=rep("|c|",7)),row.names=F,sanitize.colnames.function = force,sanitize.rownames.function = force)
+```
+Pour expliquer 95% de variance on se contentera des **3** premières valeurs propres, pour 98% on ajoutera la 4ème aussi.
+
+###Etude des Vecteurs propres:
+On liste les coordonnées des composantes principales dans la base centrée réduite et dans la base initiale puis on les visualise en les superposant en rouge aux nugaes des points précédents.
+
+```{r,results='asis',echo=F}
+print(xtable(res$rotation,align='|c|cccccc|'))
+#Dans l'espace de base:
+temp1=matrix(rep(sds,6),nc=6)
+temp2=matrix(rep(means,6),nc=6)
+PC_base=temp1*res$rotation+temp2
+print(xtable(PC_base,align='|c|cccccc|'))
+```
+
+```{r, echo=F,fig.height=6.5,fig.width=6.5,fig.align='center'}
+temp=as.data.frame(rbind(X,t(PC_base)))
+colX=c(rep('gray20',nrow(X)),rep('red',6))
+pchX=c(rep(16,nrow(X)),rep(8,6))
+cexX=c(rep(.5,nrow(X)),rep(.8,6))
+plot(temp,col=colX,pch=pchX,cex=cexX)
+```
+
+###Cercle des corrélations:
+###Premier plan factoriel
+```{r,echo=F,fig.height=6,fig.align='center'}
+layout(matrix(c(0,1,1,1,0,0,0,2,0,0),nr=5),c(1.5,1),c(1,1,6,1,1))
+biplot(res, choices = 1:2,var.axes=F,col=c('gray20',rgb(0,0,0,0)),cex=.6,font=2)
+s.corcircle(res$rotation[,1:2],clabel = 1.5)
+```
+
+###Second plan factoriel
+
+```{r,echo=F,fig.height=6,fig.align='center'}
+layout(matrix(c(0,1,1,1,0,0,0,2,0,0),nr=5),c(1.5,1),c(1,1,6,1,1))
+biplot(res, choices = 2:3,var.axes=F,col=c('gray20',rgb(0,0,0,0)),cex=.6,font=2)
+s.corcircle(res$rotation[,2:3],clabel = 1.5)
+```
+
+On constate que les points sont uniformément répartis sur le 1er plan, un peu moins sur le second plan. Sur le premier cercle de corrélation, on voit que le 1er quadrant regroupe les voitures à grandes \texttt{(puiss,vit)} opposé au 2ème quadrant et le quatrième quadrant comprend les voitures à grand volume \texttt{(poids,larg,long)} opposé au 3ème quadrant. Les covariables sont dispersés sur le 2ème cercle, mais comme certaines sont corrélées, des regions du plan restent vides.
+
+##Classification non-supervisée - kmeans:
+On applique l'algorithme \texttt{kmeans} avec 2,3,4 clusters. 
+La sortie de \texttt{kmeans} a les attributs suivants:
+
+- \texttt{centers}: Les centroides de chaque cluster.
+
+- \texttt{cluster}: L'attribution des observations aux clusters.
+
+- \texttt{withins}: La somme des carrés dans chaque cluster.
+
+- \texttt{betweenss}: La somme des carrés entre les clusters.
+```{r,echo=F}
+k2=kmeans(Xcr,centers=2)
+k3=kmeans(Xcr,centers=3)
+k4=kmeans(Xcr,centers=4)
+recap=c("4",signif(c(k4$withins,mean(k4$withins),k4$betweenss),5))
+recap=rbind(recap,c("3",signif(k3$withins,5),'-',signif(c(mean(k3$withins),k3$betweenss),5)))
+recap=rbind(recap,c("2",signif(k2$withins,5),'-','-',signif(c(mean(k2$withins),k2$betweenss),5)))
+colnames(recap)=c('K','SC1','SC2','SC3','SC4','SC-moyenne','SC')
+```
+
+```{r,results='asis',echo=F,warning=F}
+print(xtable(recap,align="c|c|cccc||cc|"),include.rownames=F,include.colnames=T,hline.after =c(-1,0,nrow(recap)),sanitize.text.function = force)
+```
+
+```{r,echo=F,fig.align='center',fig.height=5,fig.width=5,warning=F}
+plot(res$x[,1],res$x[,2],pch='x',xlim=range(res$x[,1])+c(-.5,.5),ylim=range(res$x[,2])+c(-.5,.5),xlab='PC1',ylab='PC2',main='2 clusters',col=colors[k2$cluster],grid=T)
+grid(10, 10, lwd = 2)
+text(res$x[,1],res$x[,2],col=colors[k2$cluster],labels=rownames(X), cex=.5,pos=3)
+
+plot(res$x[,1],res$x[,2],pch='x',xlim=range(res$x[,1])+c(-.5,.5),ylim=range(res$x[,2])+c(-.5,.5),xlab='PC1',ylab='PC2',main='3 clusters',col=colors[k3$cluster])
+grid(10, 10, lwd = 2)
+text(res$x[,1],res$x[,2],col=colors[k3$cluster],labels=rownames(X), cex=.5,pos=3)
+
+plot(res$x[,1],res$x[,2],pch='x',xlim=range(res$x[,1])+c(-.5,.5),ylim=range(res$x[,2])+c(-.5,.5),xlab='PC1',ylab='PC2',main='4 clusters',col=colors[k4$cluster])
+grid(10, 10, lwd = 2)
+text(res$x[,1],res$x[,2],col=colors[k4$cluster],labels=rownames(X), cex=.5,pos=3)
+
+```
+
+On remarque que les clusters sont déjà regroupés dans le premier plan factoriel et sont linéairement séparables. Avec 2 clusters, on pourrait dire que $C1=\{x|PC1(x)\geq 0\}$ et $C2=\{x|PC1(x)\leq 0\}$. On conclut du tableau que le meilleur choix de k serait **k=3** avec la plus faible $SC+SC_{moyenne}$.
+
+##Exercice 3: Caractères manuscrites
+
+```{r,echo=F,fig.height=3,fig.width=4,fig.align='center'}
+load('digits3-8.RData')
+mImage<- function(x,s){
+  im=t(matrix(x,16,16))
+  image(im,axes = FALSE, col = gray(0:255/255),useRaster=T)
+  title(s,cex.main=.8,line=.2)
+}
+#test
+#mImage(d8[21,])
+
+#Répartition des d3,d8:
+d3I=sample(1100,1000)
+d3train=d3[d3I,]
+d3test=d3[-d3I,]
+
+d8I=sample(1100,1000)
+d8train=d8[d8I,]
+d3test=d8[-d8I,]
+
+#Centrer et normaliser dxtrain:
+d3cn=scale(d3train)
+d8cn=scale(d8train)
+
+mean3=attr(d3cn,"scaled:center")
+sd3=attr(d3cn,"scaled:scale")
+
+mean8=attr(d8cn,"scaled:center")
+sd8=attr(d8cn,"scaled:scale")
+
+
+par(mfrow=c(1,2))
+mImage(mean8,'Moyenne des 8')
+mImage(mean3,'Moyenne des 3')
+
+#Covariances:
+d3cov=cov(d3cn)
+d8cov=cov(d8cn)
+
+#SVD vs EIGEN:
+svd3=svd(d3cn)$v
+eig3=eigen(d3cov)$vectors
+eig3values=eigen(d3cov)$values
+svd8=svd(d8cn)$v
+eig8=eigen(d8cov)$vectors
+eig_svd=norm(abs(svd3)-abs(eig3),'F')
+```
+
+On applique \texttt{svd} à $X$ la matrice des données, les vecteurs propres à droite $V$ vérifient: 
+$$Xv=\lambda v$$
+De plus, avec $X=USV^T$, $U^TU=V^TV=I$:
+$$X^TX=VSU^TUSV^T=V(S^TS)V^T=VDV^T$$
+Où $D=S^2$ est diagonale. 
+
+Ainsi $(X^TX)V=VD$ i.e $V$ sont des vecteurs propres de $X^TX$ que l'on calcule aussi avec \texttt{eigen} appliquée à la matrice de covariance $C\propto X^TX$
+
+Numériquement $\||V_{eig-d3}|-|V_{svd-d3}|\|_F=`r signif(eig_svd,4)`$
+
+###Modes propres:
+La 1ère ligne regroupe les 5 premiers modes propres de "3" et la deuxième ceux de "8".
+
+```{r,echo=F,fig.height=3,warning=F}
+#d3:
+K=256
+MP3= array(0, dim=c(256,256,5))
+MP8= array(0, dim=c(256,256,5))
+
+par(mfrow=c(2,5))
+par(mai=.1*rep(1,4))
+
+for(i in 1:5){
+  MP3[,,i]=eig3[,i]%*%t(eig3[,i])
+  image(MP3[,,i],col=c(0,1),ann=FALSE,xaxt='n',yaxt='n')
+}
+for(i in 1:5){
+  MP8[,,i]=eig8[,i]%*%t(eig8[,i])
+  image(MP8[,,i],col=c(0,1),ann=FALSE,xaxt='n',yaxt='n')
+}
+```
+
+###Matrice de projection sur le sous-espace vectoriel engendré par les 5 premières composantes principales:
+
+On cosnidère $U$ la matrice des composantes principales. La matrice de projection sur l'espace des composantes est définie par:
+$$P=U(U^TU)^{-1}U^T=UU^T\text{ comme }U^TU=I_5$$ 
+$P$ est une matrice de projection carrée de taille (256x256), symétrique et idempotente ($P^2=P$).
+
+```{r,echo=F}
+U3=eig3[,1:5]
+U8=eig8[,1:5]
+#Matrice de projection -3
+P=U3%*%t(U3)
+#=MP3[,,1]+MP3[,,2]+MP3[,,3]+MP3[,,4]+MP3[,,5]
+n1=norm(P%*%P-P,'F')
+```
+
+Pour $P_5=UU^T$, où U la matrices des 5 composantes, on vérifie numériquement que:
+
+$\|P_5^2-P_5\|_F=`r signif(n1,5)`$ et $P_5^T=P_5$
+
+On projette les images centrées normalisées dans l'espace des 5 premières composantes principales:
+$$\forall i\:p_{5,i}=U^T Image^{(i)}_{cn}$$
+Pour reconstruire les images de base on applique\footnote{$\odot$ dénote la multiplication terme à terme}:
+$$\hat{Image}^{(i)}=\mathbb E[Image_3]+\sigma[Image_3]\odot (U p_{5,i})$$
+
+###Exemple:
+```{r,echo=F,fig.height=3,fig.width=8,fig.align='center'}
+#La projection:
+p3=t(U3)%*%d3cn[23,]
+p8=t(U8)%*%d3cn[71,]
+#Reconstruction:
+I3=mean3+sd3*(U3%*%p3)
+I8=mean8+sd8*(U8%*%p8)
+
+par(mfrow=c(1,4))
+mImage(d3cn[23,],'Initiale')
+mImage(I3,'Reconstruite')
+mImage(d8cn[71,],'Initiale')
+mImage(I8,'Reconstruite')
+```
+Il suffit donc de stocker le vecteur des moyennes $(256\times 1)$, le vecteur des écarts-types $(256\times 1)$, la matrice des composantes U $(256 \times 5)$ et les projections $(p_{5,i})_i$ chacune de dimension $5\times 1$ ce qui permet de réduire l'espace de stockage de manière considèrable (Pour 1000 images on passe de 256000# à 6792#).
+

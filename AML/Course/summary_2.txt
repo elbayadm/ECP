@@ -1,0 +1,178 @@
+
+
+------------------------------------------------------------------------------------------
+             Lesson 2 :   Compression/Prediction/Generation equivalence
+------------------------------------------------------------------------------------------
+
+
+I - Concepts: compression/prediction/generation
+-----------------------------------------------
+
+- lossless compression / prediction / generative models
+  . data = sequence of symbols, from a known predefined alphabet (discrete setting)
+  . lossless compression: 
+    . encoder: data --> binary string    injective! otherwise not decodable  (known as: uniquely decodeable code)
+    . decoder: binary string --> data     encoder not surjective ==> not optimal compression (easy to build a better compressor)
+    . lossless <==>  decoder o encoder = Id   (no loss)
+  . prediction
+    . given a sequence of observed variables (x1,...xn), predict x_{n+1}
+    . i.e. give the probability distribution of each possible label (discrete space)
+    . so: predictor = function : data (x1...xn) -->  p(x_{n+1}|x1,...xn) probability of next symbol
+  . generative model
+    . model able to generate new data 
+    . data D is generated according to (= as often as) its model probability p(D)
+
+
+
+------------------------------------------------------------------------------------------
+
+II - From one concept to the other
+----------------------------------
+
+- prediction --> generation  [easy]
+  . start from x1 (given or taken from a learned distribution)
+  . choose x_{n+1} according to the probability law p(x_{n+1}|x1...xn) used to predict next symbol
+  . iterate and generate data this way
+  . p(D) = prod_i p(xi|x1...x_{i-1})
+
+- generation --> prediction  [by sampling, might be slow]
+  . given x1...xn, how to estimate the probability distribution of x_{n+1}?
+  . generate new data D many many time, according to the generative model law
+  . check how frequent each (x1...xn, x_{n+1}) is generated, it is p(x1...x_{n+1})
+  . compute p(x_{n+1}|x1...xn) = p(x1...x_{n+1}) / p(x1...xn)    (Bayes)
+
+- compression --> prediction 
+  . idea: strings whose encoding is shorter are more probable (coherent with L = - log p: p = 2^-L)
+    ==> complete a string: L(string+'c') --> p('c') proportional to 2^-L(string+'c')
+  . given x1...xn, build all possible completed sequences (x1,...xn,x_{n+1}) : s_k = (x1,...,xn,k-th symbol)
+  . compress each of them, independently, and check their encoding length L_k = size( encode(s_k) )
+  . define p(k) = 2^-L_k
+  . normalize p(k) by a global factor if necessary (we'll see that the norm is already 1 if the encoder is optimal)
+  . define p(x_{n+1}=k|x1...xn) = p(k)
+
+- prediction --> compression [the main point of this lesson]
+  . lesson from entropy: if we have good prior information on the distribution of x_{n+1}|x1...xn, we don't need too much information to be communicated to know which symbol for x_{n+1} is chosen
+  . encode just that information  -->  so that it is decodable later
+  . entropy = average length of that code; so, intuitively, it is not possible to be shorter (without losing information) 
+  . can we prove that bound, and is it possible to reach that limit? how?
+    ==> that's next sections
+
+
+------------------------------------------------------------------------------------------
+
+III - Encoders
+--------------
+
+- issue: when to stop reading data when decoding
+
+  . self-delimiting code:
+    . to code an integer n : needs b = log n bits; but needs also to say there are b bits to be read (if b is not known in advance)
+    . ==> need to encode first the number b = log n ; this takes log b = log log n bits
+    . ==> additional log log n bits at the beginning of the encoded binary string
+    . issue: needs to tell to read log log n bits... 
+    . ==> recursively, needs log n + log log n + log log log n + ... + log^k n bits with k so that log^k n has only 1 digit (i.e. is 0 or 1)
+    . or just log n + 2 log log n to make things simpler (log log n is already neglectible w.r.t. log n), by starting with 000000...001 (log log n bits) to tell there are as many bits (log log n) to read next to find log n, which will tell how many bits to read to find n.
+
+  . codes with "end-of-file" character
+    . postfix: read the data, until you meet a special code meaning "end"
+    . to do this: make binary blocks of fixed size, and use one of them (e.g. 0000) for "end"
+    . obvious additional cost: - log p(end) = +4 here
+    . hidden cost: can't use symbols forming 'end' at other places ==> cost = number of blocks * - log(1-p(end))    (factor ~ 0.093 here ==> not negligible when encoding long strings)
+
+  . prefix codes : when the code of a string cannot be the beginning of the code of another string (otherwise, confusion when decoding [but maybe solved later in the reading of the encoded string])
+    . examples (starting from page 104 in MacKay's book)
+    . can show later that without losing generality, one can assume a code is prefix (otherwise, rebuild a code with same coding lengths)
+
+
+
+------------------------------------------------------------------------------------------
+
+IV - Bounds, optimal codes and Kraft inequality
+-----------------------------------------------
+
+- entropy ==> make use of symbol probabilities
+  . to reduce average coding length: frequent symbols should have a shorter code
+  . hint from the compression/prediction equivalence: 2^-Length(code of s) should be proportional to p(s)
+     ==> we expect to have Length(code of s) = - log p(s)  (which we already knew)
+
+
+- Kraft inequality
+  . given an encoder, if (l_i) is the list of the lengths of all possible codewords (with multiplicity), then:
+      the code is uniquely decodeable ==> sum_i 2^-li <= 1
+    and reciprocally
+      if (l_i) satisfies sum_i 2^-li <= 1   then   there exists an encoder (prefix code) whose codewords have this length distribution
+
+  . if equality, the code is said to be "complete"
+
+  . Math proof: note S = sum_i 2^-l_i, consider any integer n, develop S^n, count terms, show that it grows at most linearly with n, hence S can't be > 1 (otherwise it would grow exponentially).
+    - more details: denoting l_min = min_i l_i and l_max = max_i l_i, regroup the terms in S^n = sum_{i1,i2,i3...in} 2^-{l_i1 + l_i2 + ... + l_in} as sum_{l = N l_min to N l_max} 2^-l A_l, with A_l being at most 2^l (maximum possible number of binary chains of length l). Consequently S^n <= N l_max.
+  . Proof by drawing: draw the hierarchical table of all possible codewords (i.e., the number of columns doubles at each new row) and realize that one cannot pick many short codewords (see Huffman code below): if one picks 0 and 1, then one cannot pick any other code starting with 0 or 1 anymore; if one picks 00, 01, and 1, one cannot add any more codeword as well. More generally, associate to any codeword the quantity 2^-length(that codeword), which is the width of its column in the hierarchical table. Realize that sum_i 2^-l_i is the width of all codewords taken in that table. And that the table has width 1.
+
+- lower bound on the compression length
+  . length(encoding X) >= H(X)
+    (proof with Gibbs inequality + Kraft, considering q:  q_i = 2^-li / Z, where Z is just the normalizing constant Z = sum_i 2^-li)
+    with equality only if the code length is coherent with the probability : - log p_i
+
+- upper bound : it's possible to build a code so that:
+    ==> Source coding theorem (symbol codes). There exists a variable-length
+        encoding C of an ensemble X such that the average length of an encoded 
+        symbol, L(C, X), satisfies L(C, X)  [H(X), H(X) + 1[.
+
+    Proof: Kraft with l_i = upper_integer(- log p_i)
+
+    ==> Constructive proof in next section:
+    1. Huffman coding (best possible with integer number of bits for each symbol)
+    2. arithmetic coding (non-integer number of bits: reaches entropy rate)
+
+
+------------------------------------------------------------------------------------------
+
+V - Huffman and arithmetic coding
+---------------------------------
+
+- Huffman coding
+  . write down one node per symbol, with its probability
+  . iteratively, join the two nodes with the lowest probabilities and form a new node, whose probability is their sum
+  . in the end, this forms a binary tree
+  . code = position in the tree (example: 101 means: go down from the root, first right, then left, then right)
+  . proof of optimality: draw the table of all possible codewords: any change increases the average code length 
+
+- arithmetic coding
+  . set an order on symbols, and associate to symbol number s the interval [cp(s-1), cp(s)] where cp is the cumulative probability distribution (cp(k) = p(1) + p(2) + ... + p(k)), with the convention p(0) = 0.
+  . any real number in [0,1] falls into only one bin (interval); the uniform law on [0,1] makes it fall in the bin of symbol i with probability p(i).
+  . encode a symbol by writing down in binary a real number falling in its bin (this number is seen as an interval, the one of all numbers whose binary writing start this way: 0.101 denotes the interval [0.1010000..., 0.1011111111...]
+  . choose the shortest (with fewest bits) such real number so that there is no ambiguity possible (falls into bin i and not i+1)
+  . to encode a string s = (s1, s2,... sn) of symbols, do the same with p(s)
+    => to encode in a streaming way, use the writing p(s) = p(s1) p(s2|s1) p(s3|s1,s2)... which narrows iteratively the interval
+  . reaches the theoretical bound (entropy) ==> optimal
+  . Huffman = approximation of arithmetic; exact when probabilities are powers of 2  (2^-b)
+  . to generate random data with the correct law: decode a random number in [0,1]
+
+
+------------------------------------------------------------------------------------------
+
+VI - Example: text compression/prediction/generation with Markov chains
+----------------------------------------------------------------------
+
+- examples: text generation: see practical session: https://www.lri.fr/~gcharpia/machinelearningcourse/sessions/2/tp2.pdf
+  . example with the IID model
+  . example with Markov chains
+    . how to learn Markov chains without storing a full matrix
+
+- compression: Hutter prize : https://en.wikipedia.org/wiki/Hutter_Prize  http://prize.hutter1.net/ 
+  . earn thousands of euros if able to compress that file by 1% more.
+
+------------------------------------------------------------------------------------------
+
+Conclusion
+----------
+
+- good models for data = good for everything: prediction, generation, compression
+- measure model suitability in bits, measure generative model errors in bits (seeing them as compressors)
+  ==> baseline: gzip (Lempel-Ziv)
+
+- (-log p) is reachable with non-integer number of bits, thanks to arithmetic coding
+
+
+
+

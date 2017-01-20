@@ -1,0 +1,168 @@
+//- optimize.jade
+doctype html
+html
+    head
+        title  Optimized Trip
+        //- load bootstrap css
+        link(rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap.min.css")
+        //- Load fonts
+        link(rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.3.0/css/font-awesome.min.css")
+        //-load datepicker css
+        link(rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/bootstrap-datepicker/1.4.0/css/bootstrap-datepicker.css")
+        //- JQuery
+        script(src="https://code.jquery.com/jquery-2.0.2.min.js")
+        //- mapbox
+        script(src='https://api.tiles.mapbox.com/mapbox.js/v2.1.9/mapbox.js')
+        link(href='https://api.tiles.mapbox.com/mapbox.js/v2.1.9/mapbox.css' rel='stylesheet')
+        link(rel="stylesheet" href="/stylesheets/mapstyle.css" )
+        link(rel="stylesheet" href="/stylesheets/timeline.css" )
+
+
+    body
+        //- Nav bar
+        nav.navbar.navbar-default.navbar-fixed-top
+            div.container-fluid
+                div.navbar-header
+                    a.navbar-brand(href="/profile")  
+                        i.fa.fa-user  Profile
+                div.navbar-right
+                    a.btn.btn-default.navbar-btn(href="/logout") Logout
+
+        div.container
+            div.jumbotron
+                    h1 Your trip ~ #{data.trip.name}
+                    h2 From #{data.trip.start_date} to #{data.trip.end_date}
+                    p Staying at " #{data.trip.stayaddress.name}"
+                    p Visiting #{data.trip.sites.length} sites
+                    p Times #{combi.bestcomb.times[1]}
+                    div.col-md-3.col-md-offset-3
+                        form(action="/saveplanning" method="post")
+                            input(type='hidden' name='combi' value=[] id="savecombi")
+                            input(type='hidden' name='meta' value="" id="meta")
+                            input(type='hidden' name='sdata' value="" id="sdata")
+                            button.btn.btn-success(type='submit' id='submit') Save Planning
+            div.container-fuild
+                div.container.pad2(id="planning")
+
+        script.
+            var weekday = new Array(7);
+            weekday[0]=  "Sunday";
+            weekday[1] = "Monday";
+            weekday[2] = "Tuesday";
+            weekday[3] = "Wednesday";
+            weekday[4] = "Thursday";
+            weekday[5] = "Friday";
+            weekday[6] = "Saturday";
+            var savecombi= document.getElementById('savecombi');
+            var planning= document.getElementById('planning');
+            var meta= document.getElementById('meta');
+            var sdata=document.getElementById('sdata');
+            var data=!{JSON.stringify(data)};
+            var combi=!{JSON.stringify(combi)};
+            var cm=combi.bestcomb.prop
+            var times=combi.bestcomb.times
+            savecombi.value=cm;
+            var trip=data.trip;
+            meta.value=trip._id;
+            var sites=data.sites;
+            sdata.value=data.nodes;
+            var D=data.matrix;
+            for(var i=0;i<data.days;i++){
+                if (cm[i].length==2) {
+                var titleDay=planning.appendChild(document.createElement('H3'));
+                var daystring=new Date(Date.parse(trip.start_date));
+                daystring.setDate(daystring.getDate() + i);
+                titleDay.innerHTML="Day "+(i+1)+" ("+weekday[daystring.getDay()]+" "+daystring.toISOString().substring(0, 10)+")";
+                var summary=planning.appendChild(document.createElement('div'));
+                summary.className="bs-callout bs-callout-info";
+                summary.appendChild(document.createElement("STRONG")).innerHTML="A free day, you can visit some extra sites";
+                continue;
+                    }
+                var vtime=0;
+                var titleDay=planning.appendChild(document.createElement('H3'));
+                var daystring=new Date(Date.parse(trip.start_date));
+                daystring.setDate(daystring.getDate() + i);
+                titleDay.innerHTML="Day "+(i+1)+" ("+weekday[daystring.getDay()]+" "+daystring.toISOString().substring(0, 10)+")  - "+(cm[i].length-2)+" sites";
+                var summary=planning.appendChild(document.createElement('div'));
+                summary.className="bs-callout bs-callout-info";
+                var day=planning.appendChild(document.createElement('ul'));
+                day.className="timeline";
+                var list=day.appendChild(document.createElement('li'));
+                var badge=list.appendChild(document.createElement('div'));
+                badge.className="timeline-badge";
+                var icon=badge.appendChild(document.createElement('i'));
+                list.style.marginBottom ="90px";
+                icon.className="glyphicon glyphicon-home";
+                var timing=list.appendChild(document.createElement('div'));
+                var icon=timing.appendChild(document.createElement('i')).className="fa fa-clock-o";
+                timing.appendChild(document.createTextNode(" "+Math.floor(times[i][0]/3600)+":"+("0"+Math.floor(times[i][0]/60)%60).slice(-2)));
+
+                for(var j=1;j<cm[i].length-1;j++){
+                    var list=day.appendChild(document.createElement('li'));
+                    list.style.marginBottom ="90px";
+                    list.style.marginTop ="90px";
+                    var route=list.appendChild(document.createElement('div'));
+                    route.className="fancyroute";
+                    var icon=route.appendChild(document.createElement('i')).className="fa fa-car";
+                    route.appendChild(document.createElement("BR"));
+                    route.appendChild(document.createTextNode(Math.floor((data.matrix[j-1][cm[i][j]]-data.visits[j-1])/60)+" min"));
+                    vtime+=Math.floor(sites[cm[i][j]-1].visit);
+                    var list=day.appendChild(document.createElement('li'));
+                    list.style.marginBottom ="90px";
+                    list.style.marginTop ="90px";
+                    if(j%2==0) list.className="timeline-inverted";
+                    var badge=list.appendChild(document.createElement('div'));
+                    badge.className="timeline-badge success";
+                    var icon=badge.appendChild(document.createElement('i'));
+                    icon.className="glyphicon glyphicon-eye-open";
+                    var panel=list.appendChild(document.createElement('div'));
+                    panel.className="timeline-panel";
+                    var heading=panel.appendChild(document.createElement('div'));
+                    heading.className="timeline-heading";
+                    var timing=heading.appendChild(document.createElement('div'));
+                    var icon=timing.appendChild(document.createElement('i')).className="fa fa-clock-o";
+                    timing.appendChild(document.createTextNode(" "+Math.floor(times[i][j]/3600)+":"+("0"+Math.floor(times[i][j]/60)%60).slice(-2)));
+                    var title=heading.appendChild(document.createElement('H4'));
+                    title.className="timeline-title";
+                    title.innerHTML=sites[cm[i][j]-1].properties.title;
+                    var body=panel.appendChild(document.createElement('div'));
+                    body.className="timeline-body";
+                    var duration=body.appendChild(document.createElement("div"));
+                    duration.appendChild(document.createElement("STRONG")).innerHTML="Visit duration: ";
+                    duration.appendChild(document.createTextNode(Math.floor(sites[cm[i][j]-1].visit)+" minutes"));
+                    var openining=body.appendChild(document.createElement("div"));
+                    openining.appendChild(document.createElement("STRONG")).innerHTML="Opening hours: ";
+                    openining.appendChild(document.createElement("BR"));
+                    openining.appendChild(document.createTextNode(sites[cm[i][j]-1].weekday_text[(data.firstday+i-1)%7]));
+                    body.appendChild(document.createElement("STRONG")).innerHTML="addresse:";
+                    body.appendChild(document.createElement("BR"));
+                    var address=body.appendChild(document.createElement("P"));
+                    address.appendChild(document.createTextNode(sites[cm[i][j]-1].properties.adresse));
+                    address.appendChild(document.createElement("BR"));
+                    address.appendChild(document.createTextNode(sites[cm[i][j]-1].properties.cp+" ,"+sites[cm[i][j]-1].properties.departements));
+                    address.style.color="#5cb85c";
+
+                }
+
+                summary.appendChild(document.createElement("STRONG")).innerHTML="Total visiting time: "+Math.floor(vtime/60)+ " hours & "+ vtime%60 +" minutes.";
+                summary.appendChild(document.createElement("BR"));
+                summary.appendChild(document.createElement("STRONG")).innerHTML="Total commuting time: "+Math.floor((combi.bestcost.Commut[i])/3600)+ " hours & "+ Math.floor(((combi.bestcost.Commut[i])/60)%60) +" minutes.";
+                var list=day.appendChild(document.createElement('li'));
+                list.style.marginBottom ="90px";
+                list.style.marginTop ="90px";
+                var route=list.appendChild(document.createElement('div'));
+                route.className="fancyroute";
+                var icon=route.appendChild(document.createElement('i')).className="fa fa-car";
+                route.appendChild(document.createElement("BR"));
+                route.appendChild(document.createTextNode(Math.floor((data.matrix[cm[i][j-1]][cm[i][j]]-data.visits[j-1])/60)+" min"));
+                var list=day.appendChild(document.createElement('li'));
+                var badge=list.appendChild(document.createElement('div'));
+                badge.className="timeline-badge";
+                var icon=badge.appendChild(document.createElement('i'));
+                list.style.marginBottom ="90px";
+                icon.className="glyphicon glyphicon-home";
+                var timing=list.appendChild(document.createElement('div'));
+                var icon=timing.appendChild(document.createElement('i')).className="fa fa-clock-o";
+                timing.appendChild(document.createTextNode(" "+Math.floor(times[i][j]/3600)+":"+("0"+Math.floor(times[i][j]/60)%60).slice(-2)));
+                }
+

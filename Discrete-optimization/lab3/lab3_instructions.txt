@@ -1,0 +1,133 @@
+Max Cut Min Flow algorithm
+
+Tasks
+=====
+
+(1) Implement Dinit's algorithm to compute the minimum cut / maximum flow of a graph ‘g’ with 'n' nodes, plus 2 nodes: source node 's' and sink node 't'.
+(2) There are 100 training and 100 testing graphs. Input data is provided in the following format.
+
+Input File Format
+=================
+
+In all graphs nodes sink node is node 'n+1' and source is node 'n+2'.
+
+Input files are given in the following format :
+
+(1) In the folder training, you have 3 types of text files for each graph:
+
+- graph_%d.txt contains a matrix representing the graph ‘g’, where %d is the ID of ‘g’. Element [i,j] of the matrix is the weight of the edge from node 'i' to node 'j'. The penultimate line of the matrix corresponds to the weights of the edges from the source 's' to all other nodes, and the last line contains the weights of the edges from the sink 't' to all other nodes (which should all be zero since there is no output edge from the sink). Thus the matrix is a n+2 by n+2 matrix.
+
+- graph_segment_%d.txt contains the partition of the s-t cut for graph ‘g’, where %d is the ID of ‘g’. That is for each node the corresponding assignment to either U or V/U after the cut (see course slides for notation). For example '10 : 1' means that node 10 belongs to V/U. This file contains only assignment for nodes up to 'n' since the assignement of source and sink is straigthforward.
+
+- graph_flow_%d.txt contains the value of the cut (equivalently, the value of the flow) for graph ‘g’, where %d is the ID of ‘g’.
+
+Use these training files to test your algorithm before submitting.
+
+(2) In the folder testing, you are only given the initial graph, that is files graph_%d.txt. These are the graphs you will be evaluated on.
+
+Submission
+==========
+
+(1) Results
+
+    - A file dinit_flow_%d.txt, where %d should be replaced by the ID of ‘g’. This file should contain the value of the minimum cut / maximum flow as a scalar integer value.
+    - A file dinit_%d.txt, where %d should be replaced by the ID of ‘g’. This file should contain the residual graph at each iteration, with the same format as the graph in input files graph_%d.txt. Step to a new line at each iteration (but do not jump line).
+
+(2) A text file "runtime.txt" containing the average runtime of each algorithm to compute the minimum cut / maximum flow for all graphs, averaged over the number of graphs. The file should be
+    in the following format:
+    Dinit: xx.xx seconds
+
+(3) Your code.
+
+Submission Code Format
+=================
+
+Formating for C/C++
+
+(1) Input/Outputs
+
+Your code should look for the testing files in the folder "testing".
+For example using:
+    string filename = "./testing/graph_%d.txt";
+    ifstream instream(filename.c_str());
+
+You should output all your files in the current directory: all the dinit_flow_%d.txt, dinit_%d.txt, runtime.txt.
+
+NOTE:
+Your code should not always create the files. Mainly because it is very slow. Your code should use the definition of the DOPRINT variable to know if you should or not create all the files. Use it the same way you use include guards:
+
+    int main(){
+      bool do_print = false;
+      #ifdef DOPRINT
+      do_print = true;
+      #endif
+
+      // you can pass it as an argument to your function to know whether you should print or not
+      dinit(graph, ..., do_print);
+
+      // and/or use it directly in your main function
+      if(do_print) {
+        // print the data in the file
+      }
+    }
+
+
+Then in the rest of your code you can use this "print" variable to know if you should print the files or not. This can be done in any file, this DOPRINT will be defined for all your .hpp and .cpp files by our compilation script.
+
+Warning: the runtime.txt must be outputted all the times even when the DOPRINT variable is not defined.
+
+(2) Code in the zip file
+
+All your code should be in a folder that you zipped.
+You only need to submit the source files: the .cpp and .hpp.
+For example, the zip could contain:
+    ./code/main.cpp
+    ./code/dinit.hpp
+    ./code/dinit.cpp
+
+When you open your zipped folder in the unzipping assistant, you should only see one folder containing your sources, not all your sources directly (DEPTH = 1).
+Only the zip format is available (not rar!).
+
+Formating for python
+
+(1) Input/Outputs
+
+Your code should contain at least one file called main.py .
+This file should contain a function called "run".
+
+Your code should look for the files graph_%d.txt in the folder "testing".
+
+NOTE:
+Your code should not always create the files. Mainly because it is very slow. If you want not to create all the files when timing your execution, that call function should take one argument which will be false if you should not print and true if you should print.
+
+The function should look like:
+
+    def run(do_print):
+
+        # some code
+
+        if do_print:
+            outputFile = open(outputFileName)
+            # print the data in the file
+
+Warning: the runtime.txt must be outputted all the times even when the argument do_print is set to false.
+
+(2) Code in the zip file
+
+All your code should be in a folder that you zipped
+You need only to submit the .py files.
+It should look like:
+    ./code/main.py
+    ./code/dinit.py
+
+When you open your zipped folder in the unzipping assistant, you should only see one folder containing your sources, not all your sources directly (DEPTH = 1).
+Only the zip format is available (not rar!).
+
+Notes
+=====
+
+(1) Please divide yourselves up into groups of two.
+(2) Each student should submit a separate zip file.
+(3) The solutions will be checked automatically, so please adhere to the
+    specified output format.
+(4) IMPORTANT NOTE : Please submit under your First Name-Last Name on the submission server when required to fill your name.

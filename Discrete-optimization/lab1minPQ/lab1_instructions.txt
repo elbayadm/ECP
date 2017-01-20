@@ -1,0 +1,152 @@
+Shortest Path Algorithms
+
+Tasks
+=====
+
+(1) Implement Dijkstra's method to compute the shortest path from a given node
+    's' to all other nodes.
+(2) Implement the Bellman-Ford method to compute the shortest path from a given
+    node 's' to all other nodes.
+(3) Implement the Floyd-Warshall method to compute all-pairs shortest paths.
+(4) Use the three methods to compute the shortest path between all pairs of
+    Paris metro stations. Input data is provided in the following format.
+
+Input File Format
+=================
+
+First line contains the number of vertices 'n' in the graph.
+Next line contains the number of neighbors of vertex 0, followed by the ID of
+each neighbor and the length of the corresonding edge.
+Next line contains the number of neighbors of vertex 1, followed by the ID of
+each neighbor and the length of the corresonding edge.
+....
+Next line contains the number of neighbors of vertex n-1, followed by the ID of
+each neighbor and the length of the corresonding edge.
+
+Submission
+==========
+(1) Results for Dijkstra's method.
+    - Filenames: dijkstra%d.txt, where %d should be replaced by the ID of 's'.
+    - Each file should contain the 'd' array at each iteration.
+    - Print the 'd' array in a separate line for each iteration.
+    - The elements of the 'd' array should be separated by a single space.
+    - For "infinity", print "inf".
+
+(2) Results for Bellman-Ford method.
+    - Filenames: bf%d.txt, where %d should be replaced by the ID of 's'.
+    - Each file should contain the 'd' array at each iteration.
+    - Print the 'd' array in a separate line for each iteration.
+    - The elements of the 'd' array should be separated by a single space.
+    - For "infinity", print "inf".
+
+(3) Results for Floyd-Warshall method.
+    - Filename: fw.txt
+    - Print the matrix 'd' for the last iteration (that is, the shortest paths).
+    - Each row of the matrix should be in a single line.
+    - The elements of a row should be separated by a single space.
+    - For "infinity", print "inf".
+
+(4) A text file "runtime.txt" containing the average runtime of each algorithm
+    to compute the shortest path between a pair of stations. The file should be
+    in the following format:
+    Dijkstra: xx.xx seconds
+    Bellman-Ford: yy.yy seconds
+    Floyd-Warshall: zz.zz seconds
+    where xx.xx, yy.yy and zz.zz are the average runtime.
+
+    These Dijkstra,  Bellman-Ford and Floyd-Warshall variables are the ones you should report in your runtime.txt file, one per line.
+
+(5) Your code for all three methods.
+
+Submission Code Format
+=================
+
+Formating for C/C++
+
+(1) Input/Outputs
+
+Your code should look for the metroEdgeDist.txt in the current folder.
+
+For example using:
+    string filename = "metroEdgeDist.txt";
+    ifstream instream(filename.c_str());
+    
+The same way, you should output all your files in the current directory: all the dijkstra%d.txt, bf%d.txt, fw.txt and runtime.txt
+
+NOTE:
+Your code should not always create the files. Mainly because it is very slow. Your code should use the definition of the DOPRINT variable to know if you should or not create all the files. Use it the same way you use include guards:
+
+    int main(){
+      bool do_print = false;
+      #ifdef DOPRINT
+      do_print = true;
+      #endif
+
+      // you can pass it as an argument to your function to know whether you should print or not
+      dijkstra(graph, ..., do_print);
+
+      // and/or use it directly in your main function
+      if(do_print) {
+        // print the data in the file
+      }
+    }
+    
+
+Then in the rest of your code you can use this "print" variable to know if you should print the files or not. This can be done in any file, this DOPRINT will be defined for all your .hpp and .cpp files by our compilation script.
+
+Warning: the runtime.txt must be outputted all the times even when the DOPRINT variable is not defined.
+
+(2) Code in the zip file
+
+All your code should be in a folder that you zipped.
+You only need to submit the source files: the .cpp and .hpp.
+For example, the zip could contain:
+    ./code/main.cpp
+    ./code/dijkstra.hpp
+    ./code/dijkstra.cpp
+    
+When you open your zipped folder in the unzipping assistant, you should only see one folder containing your sources, not all your sources directly (DEPTH = 1). 
+Only the zip format is available (not rar!).
+
+Formating for python
+
+(1) Input/Outputs
+
+Your code should contain at least one file called main.py .
+This file should contain a function called "run".
+
+Your code should look for the metroEdgeDist.txt in the current folder.
+
+NOTE:
+Your code should not always create the files. Mainly because it is very slow. If you want not to create all the files when timing your execution, that call function should take one argument which will be false if you should not print and true if you should print.
+
+The function should look like:
+
+    def run(do_print):
+
+        # some code
+
+        if do_print:
+            outputFile = open(outputFileName)
+            # print the data in the file
+    
+Warning: the runtime.txt must be outputted all the times even when the argument do_print is set to false.
+
+(2) Code in the zip file
+
+All your code should be in a folder that you zipped
+You need only to submit the .py files.
+It should look like:
+    ./code/main.py
+    ./code/dijkstra.py
+
+When you open your zipped folder in the unzipping assistant, you should only see one folder containing your sources, not all your sources directly (DEPTH = 1). 
+Only the zip format is available (not rar!).
+
+Notes
+=====
+
+(1) Please divide yourselves up into groups of two.
+(2) Each student should submit a separate zip file.
+(3) The solutions will be checked automatically, so please adhere to the
+    specified output format.

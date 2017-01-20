@@ -1,0 +1,399 @@
+---
+title: 'SMDA - TP1: SVM et modèles de mélanges'
+author: "Maha ELBAYAD"
+date: "10 Octobre 2015"
+output: pdf_document
+---
+
+#Application I : classification
+##Preliminaries
+```{r, echo=F,include=FALSE}
+library(kernlab)
+library(mixtools)
+K=20
+```
+
+```{r}
+emails=read.table("spam.txt",header=T,sep=';');
+#Nombre des observations et des variables:
+str(emails)
+```
+Les covariables A.1 ... A.54 correspondent aux word_freq_WORD et aux char_freq_CHAR.
+
+A.55 est le capital_run_length_average et A.56, A.57 sont les covariables entières capital_run_length_longest et capital_run_length_total. 
+
+la dernière variable 'spam' est notre variable cible.
+
+###Variable cible 
+```{r,fig.height =3, fig.width =3}
+Y=emails$spam
+levels(Y); table(Y); plot(Y)
+#proportions des spams/emails:
+prop.table(table(Y))*100
+```
+
+##Classification par C-SVM - Noyau gaussien - C=1:
+
+```{r}
+Itrain=sample(1:nrow(emails),0.75*nrow(emails))
+Xtrain=as.matrix(emails[Itrain,1:57])
+Ytrain=as.factor(emails[Itrain,58])
+Xtest=as.matrix(emails[-Itrain,1:57])
+Ytest=as.factor(emails[-Itrain,58])
+
+#Classification C-svm avec k-fold cross-validation.
+classif=ksvm(x=Xtrain,y=Ytrain,type='C-svc', kernel='rbfdot',cross=4)
+```
+
+###Performance sur la base d'apprentissage:
+
+```{r}
+prediction.train=predict(classif,Xtrain)
+Confusion.train=table(pred=prediction.train, true=Ytrain)
+Confusion.train
+#Erreur de classification:
+Err=(Confusion.train[1,2]+Confusion.train[2,1])/length(Ytrain)
+#Faux positifs:(Spams classés commme emails)
+FP=Confusion.train[1,2]/(Confusion.train[1,2]+Confusion.train[2,2])
+#Faux négatifs (Emails classés comme spams)
+FN=Confusion.train[2,1]/(Confusion.train[1,1]+Confusion.train[2,1])
+```
+
+**`r paste("AC (bonnes détections)=",round((1-Err)*100,2),"%, Erreur=",round(Err*100,2),"%, FP=",round(FP*100,2),"% and FN=", round(FN*100,2),"%", sep="")`**
+
+###Performance sur la base de test:
+
+```{r}
+prediction.test=predict(classif,Xtest)
+Confusion.test=table(pred=prediction.test, true=Ytest)
+Confusion.test
+#Erreur de classification:
+Err=(Confusion.test[1,2]+Confusion.test[2,1])/length(Ytest)
+#Faux positifs:(Spams classés commme emails)
+FP=Confusion.test[1,2]/(Confusion.test[1,2]+Confusion.test[2,2])
+#Faux négatifs (Emails classés comme spams)
+FN=Confusion.test[2,1]/(Confusion.test[1,1]+Confusion.test[2,1])
+```
+
+**`r paste("AC (bonnes détections)=",round((1-Err)*100,2),"%, Erreur=",round(Err*100,2),"%, FP=",round(FP*100,2),"% and FN=", round(FN*100,2),"%", sep="")`**
+
+###L’impact du choix aléatoire de la base d'apprentissage
+
+```{r,fig.height=4}
+Errs=rep(0,K)
+set.seed(271)
+for (k in 1:K){
+  Itrain=sample(1:nrow(emails),0.75*nrow(emails))
+  Xtrain=as.matrix(emails[Itrain,1:57])
+  Ytrain=as.factor(emails[Itrain,58])
+  Xtest=as.matrix(emails[-Itrain,1:57])
+  Ytest=as.factor(emails[-Itrain,58])
+  classif=ksvm(x=Xtrain,y=Ytrain,type='C-svc', kernel='rbfdot',cross=4)
+  prediction.test=predict(classif,Xtest)
+  Confusion.test=table(pred=prediction.test, true=Ytest)
+  Errs[k]=(Confusion.test[1,2]+Confusion.test[2,1])/length(Ytest)*100
+}
+#Histogramme avec un nombre de classes selon la règle de Freedman-Diaconis. 
+par(mfrow=c(1,2))
+hist(Errs,breaks="FD")
+boxplot(Errs)
+```
+
+L'histogramme est identique à celui d'une distribution gaussienne et le corps de la boite à moustaches est très petit, ce qui signifie que l'erreur est homogène et que la séléction aléatoire de la base d'apprentissage a peu d'impact sur la performance du modèle SVM.
+
+###L’impact des noyaux:
+
+On se propose de comparer les 3 noyaux suivants: 
+
+  - vanilladot: Linear kernel function
+  - tanhdot: Hyperbolic tangent kernel function (sigmoid)
+  - polydot: Polynomial kernel function (d=2)
+  
+```{r}
+
+Errs.linear=rep(0,K)
+Errs.sigmoid=rep(0,K)
+Errs.poly=rep(0,K)
+
+
+set.seed(1801)
+for (k in 1:K){
+  Itrain=sample(1:nrow(emails),0.75*nrow(emails))
+  Xtrain=as.matrix(emails[Itrain,1:57])
+  Ytrain=as.factor(emails[Itrain,58])
+  Xtest=as.matrix(emails[-Itrain,1:57])
+  Ytest=as.factor(emails[-Itrain,58])
+
+  #Les modèles:
+  classif.linear=ksvm(x=Xtrain,y=Ytrain,type='C-svc',
+                      kernel='vanilladot',kpar=list(),cross=3)
+  classif.sigmoid=ksvm(x=Xtrain,y=Ytrain,type='C-svc',
+                       kernel='tanhdot',kpar=list(scale=0.001),cross=3)
+  classif.poly=ksvm(x=Xtrain,y=Ytrain,type='C-svc',
+                    kernel='polydot',kpar=list(degree=3,scale = 1, offset = 1),cross=3)
+  #Les prédictions
+  prediction.linear=predict(classif.linear,Xtest)
+  prediction.sigmoid=predict(classif.sigmoid,Xtest)
+  prediction.poly=predict(classif.poly,Xtest)
+  #Les matrices de confusion et erreurs de prédiction:
+  Confusion.linear=table(pred=prediction.linear, true=Ytest)
+  Confusion.sigmoid=table(pred=prediction.sigmoid, true=Ytest)
+  Confusion.poly=table(pred=prediction.poly, true=Ytest)
+  
+  Errs.linear[k]=(Confusion.linear[1,2]+Confusion.linear[2,1])/length(Ytest)*100
+  Errs.sigmoid[k]=(Confusion.sigmoid[1,2]+Confusion.sigmoid[2,1])/length(Ytest)*100
+  Errs.poly[k]=(Confusion.poly[1,2]+Confusion.poly[2,1])/length(Ytest)*100
+}
+
+  par(mfrow=c(1,4))
+  boxplot(Errs,main="Gaussien",ylim=c(5,25))
+  boxplot(Errs.linear,main="Linéaire",ylim=c(5,25))
+  boxplot(Errs.poly,main="Poly",ylim=c(5,25))
+  boxplot(Errs.sigmoid,main="Sigmoid",ylim=c(5,25))
+```
+
+Les deux noyaux linéaire et gaussien ont de bonnes performances alors que le noyau *sigmoid* a une performance médiocre sans tuning.
+
+#Application II : Mélange de classifieurs, algorithme EM
+##Mélange de gaussiennes
+
+```{r,fig.height=4}
+  
+irm=as.matrix(read.table("irm_thorax.txt",header=F,sep=';'))
+par(mfrow=c(1,2)) 
+image(irm,col= gray((0:32)/32))
+hist=hist(irm,breaks=40)
+X=c(irm)
+```
+A partir de l'histogramme on peut dire que la distribution des couleurs est un mélange de deux/trois gaussiennes.
+
+###Expectation-Maximization 
+Dans le cas d'un mélange de K gaussiennes $f(x)=\sum\limits_{k=1}^Kp_k.f_k(x)$
+
+Notre objectif est de maximiser $\ln\mathbb P(X|\theta)$ où $\theta=(p_1,...,p_K,\mu_1,...,\mu_K,\sigma_1,...,\sigma_K).$
+
+On a donc:
+$$\ln\mathbb P(X|\theta)=\sum\limits_{i=1}^n\ln\left(\sum\limits_{k=1}^Kp_k.f_k(x_i)\right)$$
+avec: $$f_k(x)=\frac{1}{\sigma_k\sqrt{2\pi}}\exp\left[-\frac{(x-\mu_k)^2}{2\sigma_k^2}\right]$$
+La condition d'optimalité par rapport à la variable $\mu_k$ donne:
+$$
+\frac{\partial}{\partial\mu_k}\ln\mathbb P(X|\theta)=0= \sum\limits_{i=1}^n\frac{p_k.f_k(x_i)}{f(x_i)}(x_i-\mu_k)
+$$
+En posant $$\eta_i^{(k)}=\frac{p_k.f_k(x_i)}{f(x_i)}$$
+on a alors: $$\mu_k=\frac{\sum\limits_{i=1}^n\eta_i^{(k)}.x_i}{\sum\limits_{i=1}^n\eta_i^{(k)}}$$
+D'une façon similaire on dérive par rapport aux $\sigma_k$:
+$$\sigma_k=\frac{\sum\limits_{i=1}^n\eta_i^{(k)}.(x_i-\mu_k)^2}{\sum\limits_{i=1}^n\eta_i^{(k)}}$$
+On maximise ensuite selon les $(p_k)_k$ en tenant compte de la condition $\sum\limits_{k=1}^Kp_k=1$. 
+
+Ceci est équivalent à maximiser: 
+$$\ln\mathbb P(X|\theta)+\lambda(\sum\limits_{k=1}^Kp_k-1)$$
+où $\lambda$ est un multiplicateur de Lagrange.
+
+En dérivant par rapport à $p_k$ on trouve:
+$$\lambda+\sum\limits_{i=1}^n\frac{f_k(x_i)}{f(x_i)}=0$$
+On multiplie les deux côtés par $p_k$ et on somme suivant k en exploitant la contrainte du problème pour trouver $\lambda=-n$
+Ainsi:
+$$\sum_i\eta_i^{(k)}=p_k\sum_i\frac{f_k(x_i)}{f(x_i)}=-\lambda p_k=np_k$$
+d'où $p_k=\frac{1}{n}\sum_i\eta_i^{(k)}$
+```{r}
+#Fonction auxiliaire: densité gaussienne
+  gaussienne<-function(x,mu,sigma){1/sqrt(2*pi)/sigma*exp(-1/2*(x-mu)^2/sigma^2)}
+
+EMG<-function(X,K,max_iter=500,tol=1e-10,verbose=FALSE){
+  #X: les observations, K:le nombre de gaussiennes, max_iter: nombre d'itérations EM.
+  #Initialisation:
+  set.seed(1667)
+  p=rep(1/K,K)
+  sigma=rep(sd(X),K)
+  mu=X[sample(1:length(X),K)]
+  criterion=sqrt(sum(p^2))
+  eta=matrix(rep(0,length(X)*K),nrow=K)
+  iter=0
+  while((iter<max_iter) & (criterion>tol)){
+    iter=iter+1
+    #Calcul des responsabilités (E-step):
+    for (i in 1:length(X)){
+      f=sum(p*gaussienne(X[i],mu,sigma))
+      for(k in 1:K)
+      eta[k,i]=p[k]*gaussienne(X[i],mu[k],sigma[k])/f
+    }
+    p.old=p
+    p=rowMeans(eta)
+    criterion=sqrt(sum((p-p.old)^2))
+    if(verbose) {
+      print(paste("iteration ",iter))
+      print(p)
+   }
+    
+    #Calcul des moyennes/variances (M-step):
+    mu=(eta%*%X)/rowSums(eta)
+    for(k in 1:K)
+      sigma[k]=sqrt(sum(eta[k,]*((X-mu[k])^2))/sum(eta[k,]))
+  }
+  if(iter==max_iter) warning('EM algorithm didn\'t converge')
+  list(p=p,sigma=sigma,mu=mu,eta=eta,iter=iter)
+}
+
+## Deux gaussiennes:
+
+  G2=EMG(X,2)
+  G2$p
+  G2$sigma
+  G2$mu
+  G2$iter
+  Ypred=G2$p[1]*gaussienne(0:255,G2$mu[1],G2$sigma[1])+
+    G2$p[2]*gaussienne(0:255,G2$mu[2],G2$sigma[2])
+  plot(hist$mids,hist$density,ylim=c(0,.015),xlab="Intensité",
+       ylab="proba",lwd=3,type='h',col='darkgray')
+  lines(Ypred,col="blue4",lwd=2)
+  lines(G2$p[1]*gaussienne(0:255,G2$mu[1],G2$sigma[1]),col='red',lty=2)
+  lines(G2$p[2]*gaussienne(0:255,G2$mu[2],G2$sigma[2]),col='darkgreen',lty=2)
+
+## Trois gaussiennes:
+  G3=EMG(X,3)
+  G3$p
+  G3$sigma
+  G3$mu
+  G3$iter
+  Ypred=G3$p[1]*gaussienne(0:255,G3$mu[1],G3$sigma[1])+
+    G3$p[2]*gaussienne(0:255,G3$mu[2],G3$sigma[2])+
+    G3$p[3]*gaussienne(0:255,G3$mu[3],G3$sigma[3])
+  plot(hist$mids,hist$density,ylim=c(0,.015),xlab="Intensité",
+       ylab="proba",lwd=3,type='h',col='gray')
+  lines(Ypred,col="blue4",lwd=2)
+  lines(G3$p[1]*gaussienne(0:255,G3$mu[1],G3$sigma[1]),col='red',lty=2)
+  lines(G3$p[2]*gaussienne(0:255,G3$mu[2],G3$sigma[2]),col='darkgreen',lty=2)
+  lines(G3$p[3]*gaussienne(0:255,G3$mu[3],G3$sigma[3]),col='pink',lty=2)
+
+## Cinq gaussiennes:
+  G5=EMG(X,5)
+  G5$p
+  G5$sigma
+  G5$mu
+  G5$iter
+  Ypred=G5$p[1]*gaussienne(0:255,G5$mu[1],G5$sigma[1])+
+    G5$p[2]*gaussienne(0:255,G5$mu[2],G5$sigma[2])+
+    G5$p[3]*gaussienne(0:255,G5$mu[3],G5$sigma[3])+
+    G5$p[4]*gaussienne(0:255,G5$mu[4],G5$sigma[4])+
+    G5$p[5]*gaussienne(0:255,G5$mu[5],G5$sigma[5])
+  plot(hist$mids,hist$density,ylim=c(0,.015),xlab="Intensité",
+       ylab="proba",lwd=3,type='h',col='gray')
+  lines(Ypred,col="blue4",lwd=2)
+  lines(G5$p[1]*gaussienne(0:255,G5$mu[1],G5$sigma[1]),col='red',lty=2)
+  lines(G5$p[2]*gaussienne(0:255,G5$mu[2],G5$sigma[2]),col='darkgreen',lty=2)
+  lines(G5$p[3]*gaussienne(0:255,G5$mu[3],G5$sigma[3]),col='gold3',lty=2)
+  lines(G5$p[4]*gaussienne(0:255,G5$mu[4],G5$sigma[4]),col='cyan3',lty=2)
+  lines(G5$p[5]*gaussienne(0:255,G5$mu[5],G5$sigma[5]),col='coral2',lty=2)
+
+```
+
+
+###Segmentation de l'image:
+
+
+```{r}
+  par(mfrow=c(1,2))
+  image(irm,col= gray((0:32)/32))
+  Classif2=apply(G2$eta*matrix(rep(G2$p,dim(G2$eta)[2]),nr=2), 2, which.max)
+  image(matrix(Classif2,nr=dim(irm)[1]),col=c('gray10','gray50'))
+  Classif3=apply(G3$eta*matrix(rep(G3$p,dim(G3$eta)[2]),nr=3), 2, which.max)
+  image(matrix(Classif3,nr=dim(irm)[1]),col=c('gray10','gray30','gray60'))
+  Classif5=apply(G5$eta*matrix(rep(G5$p,dim(G5$eta)[2]),nr=5), 2, which.max)
+  image(matrix(Classif5,nr=dim(irm)[1]),col=c('gray10','gray25','gray50','gray65','gray80'))
+  
+```
+
+La segmentation semble de plus en plus pertinente en augmentant le nombre de gaussiennes et donc le nombre de classes. Mais à partir de 5 gaussiennes, l'image devient très fragmentée.
+
+##Mixture de régressions par l'algorithme EM:
+
+```{r}
+reg.data=read.table("regression_double.txt",header=T,sep=';');
+str(reg.data)
+plot(reg.data,pch=19,cex=0.6)
+```
+
+On remarque qu'il ne peut exister une fonction qui mappe l'espace de la covariable dans celui de la variable cible, la même covariable peut avoir deux réponses différentes (d'où les deux droites). ceci est probablement dû au fait qu'on n'a pris compte d'autres variables explicatives. Une regression linéaire simple n'est pas suffisante dans ce cas. 
+
+###Deux régressions:
+
+```{r}
+set.seed(1697)
+reg.model=regmixEM(y=reg.data[,2],x=reg.data[,1],k=2)
+classify=apply(reg.model$posterior,1,which.max)
+plot(reg.data,pch=19,cex=0.6,col=c("blue4","gold4")[classify])
+abline(reg.model$beta[,1],lwd=2,col="blue4")
+abline(reg.model$beta[,2],lwd=2,col="gold4")
+
+#Régression linéaire simple:
+lm1=lm(reg.data[,2]~reg.data[,1])
+abline(lm1,lty=2,lwd=2)
+
+#Calcul des résidus:
+
+residuals=reg.model$beta[1,classify]+reg.model$beta[2,classify]*reg.data[,1]-reg.data[,2]
+plot(residuals,col=c("blue4","gold4")[classify],pch=19,cex=.4)
+hist(residuals,breaks=15,main="Histogramme des résidus")
+RSS=t(residuals)%*%residuals
+RSS.1=t(lm1$residuals)%*%lm1$residuals
+```
+
+**La somme des carrés des résidus (deux régressions linéaires) =`r paste(round(RSS,2))`**
+
+**La somme des carrés des résidus (régression linéaire simple) =`r paste(round(RSS.1,2))`**
+
+
+###Nombre d'itérations limité
+```{r}
+#Une seule itération
+set.seed(1697)
+reg.model.1=regmixEM(y=reg.data[,2],x=reg.data[,1],k=2,maxit=1)
+classify.1=apply(reg.model.1$posterior,1,which.max)
+plot(reg.data,pch=19,cex=0.6,col=c("blue4","gold4")[classify.1])
+points(reg.data[classify.1!=classify,],col='red')
+abline(reg.model.1$beta[,1],lwd=2,col="blue4")
+abline(reg.model.1$beta[,2],lwd=2,col="gold4")
+Misclass.1=sum(classify.1!=classify)
+```
+
+**Avec une seule itération, `r Misclass.1` mauvaises prédictions.**
+```{r}
+#Deux itérations:
+set.seed(1697)
+reg.model.2=regmixEM(y=reg.data[,2],x=reg.data[,1],k=2,maxit=2)
+classify.2=apply(reg.model.2$posterior,1,which.max)
+plot(reg.data,pch=19,cex=0.6,col=c("blue4","gold4")[classify.2])
+points(reg.data[classify.2!=classify,],col='red')
+abline(reg.model.2$beta[,1],lwd=2,col="blue4")
+abline(reg.model.2$beta[,2],lwd=2,col="gold4")
+Misclass.2=sum(classify.2!=classify)
+```
+
+**Avec deux itérations, `r Misclass.2` mauvaises prédictions.**
+
+```{r}
+#Cinq itérations:
+set.seed(1697)
+reg.model.5=regmixEM(y=reg.data[,2],x=reg.data[,1],k=2,maxit=5)
+classify.5=apply(reg.model.5$posterior,1,which.max)
+plot(reg.data,pch=19,cex=0.6,col=c("blue4","gold4")[classify.5])
+points(reg.data[classify.5!=classify,],col='red')
+abline(reg.model.5$beta[,1],lwd=2,col="blue4")
+abline(reg.model.5$beta[,2],lwd=2,col="gold4")
+Misclass.5=sum(classify.5!=classify)
+
+```
+
+
+**Avec cinq itérations, `r Misclass.5` mauvaises prédictions.**
+
+
+```{r}
+plot(c(1,2,5,length(reg.model$all.loglik)),
+     c(Misclass.1,Misclass.2,Misclass.5,0),
+     type="o",pch=4,lwd=2,xlab="#Iterations",ylab="Erreur")
+plot(reg.model)
+abline(v=5,col='gold4',lty=3,lwd=2)
+```
+
+On constate qu'on arrive à bien classer les vecteurs à partir de la 5ème itération même si l'algorithme n'a pas encore convergé vu que la log-vraisemblance du modèle est "suffisante". 

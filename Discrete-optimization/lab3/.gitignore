@@ -1,0 +1,4 @@
+training/
+testing/
+runtime*.txt
+dinit_*

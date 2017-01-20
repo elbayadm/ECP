@@ -1,0 +1,248 @@
+
+Lesson 1: Introduction + Entropy
+
+
+------------------------------------------------------------------------------------------
+                       GENERAL INTRODUCTION TO THE COURSE
+------------------------------------------------------------------------------------------
+
+- What you've not seen yet in Machine Learning (ML):
+
+  - Information theory : theoretical ground for ML in general
+
+  - Reinforcement learning : learning actions, strategies... : dynamical systems + interaction with the environment
+    . prediction of time series
+    . exploration strategies
+    . video of examples: https://www.lri.fr/~gcharpia/machinelearningcourse/videos.html
+
+
+- About the course:
+  - starts at 8h00!
+  - 1h30 lesson (math/algorithmics) + 1h30 practice (math exercise / python coding)
+  - validation: final test + project
+  - program, references, exercices and videos online: https://www.lri.fr/~gcharpia/machinelearningcourse/
+  - references (cf website: https://www.lri.fr/~gcharpia/machinelearningcourse/refs.html )
+      . Information theory, inference, and learning algorithms : David MacKay : http://www.inference.phy.cam.ac.uk/mackay/itila/ (free)
+      . Elements of information theory (2nd edition) : Thomas Cover & Joy Thomas 
+      . Notes by Jeremy Bensadon of courses by Yann Ollivier : http://www.lri.fr/~bensadon/
+      . Reinforcement Learning: An Introduction : Richard S. Sutton & Andrew G. Barto : http://webdocs.cs.ualberta.ca/~sutton/book/the-book.html
+
+
+
+------------------------------------------------------------------------------------------
+                 FIRST PART OF THE COURSE : INFORMATION THEORY
+------------------------------------------------------------------------------------------
+
+
+Information theory provides a theoretical ground for ML in general.
+ 
+The problems we aim at solving:
+   - how to complete a sequence? 
+     . 1 2 3 5 7 11 13 17 ?? 
+     . why is 19 more "probable"? how to justify it?
+   - how to decide between two models for given data?
+   - how to set a ML problem? which criterion to optimize? how to measure a solution's performance?
+
+and this will lead us to the following problems:
+   - how to quantify information?
+   - is there a "natural" distribution over numbers? over models? 
+   - how to compress (losslessly) data? are there bounds?
+  
+Information theory is also (but we will not study this):
+   - communication in a noisy channel (Shannon): error-correcting codes
+   - hash functions
+
+
+
+Today:
+ I  : Information & Entropy
+ II : Why '- log p'
+ III: Extensions
+  III-A : pairs of variables, pair of laws
+  III-B : sequences of non-independent variables
+  III-C : continuous distributions
+  III-D : an example of application through noisy channels : EEG
+
+
+------------------------------------------------------------------------------------------
+
+I : Information & Entropy
+-------------------------
+
+- Information
+
+  - Quantify information:
+    ex: . game of 20 binary questions : level of information = number of questions to ask to find the object
+           --> test with a bot: http://www.20q.net/
+        . pick an object according to a random law: can do better than dichotomy (fewer questions) if I know the distribution. 
+           Ex: (1/4, 1/4, 1/4, 1/4) vs (1/2, 1/4, 1/8, 1/8) with pie charts (2 binary questions vs 1.75 on average). 
+           Optimal questions for (case 2) are not optimal for (case 1) either (would increase the average number of binary questions to 2.25).
+
+  - Desired properties:
+    . continuous function H of the distribution p of the random variable X:  H(X) = H(p1, p2, p3...) 
+        => H(p1+epsilon1, p2+epsilon2...) ~ H(p1,p2...)
+    . symmetry: H(p1, p2, p3) = H(p2, p1, p3)
+    . additivity / independance to internal representation:
+        H(uniform over n bins) = H(distribution in k clusters) + sum_i p(cluster i) H(uniform over bins of cluster i)
+        or equivalently H(p1,p2,p3...) = H(p1+p2, p3, p4...) + (p1+p2) H(p1/(p1+p2), p2/(p1+p2))
+    . uniform distribution has maximum entropy, and its entropy increases with the number of bins
+        => no prior information over which bin to choose
+        => ask for a uniformly random integer between 1 and 2, then between 1 and 10000 (more information needs to be communicated to identify the number in the latter case)
+
+
+- Entropy definition (Shannon entropy)
+
+  - Proposition (Khinchin, 1957): Any function f satisfying the properties above can be written as f(p) = - C \sum_i p_i log(p_i).
+
+  - we choose log_2 and C = 1 : Shannon entropy, unit = bit = number of binary question needed.
+
+
+- Examples :
+   - uniform law
+     . H(uniform over n bins) = log_2 n
+   - Dirac peak
+     . H = 0
+   - Bernouilli B(theta): toss a coin, which has proba theta for head and 1-theta for tail
+     . theta = 0 or 1 : Dirac => minimal entropy
+     . theta = 1/2 : uniform over 2 bins => maximal entropy
+     . show graph
+
+ - Other properties:   
+   . H(X) >= 0
+   . H(X) = 0 iff there exists i so that p(x_i) = 1
+   . H(any distribution over n bins) <= log_2 n  ( = H(uniform) ) 
+   . H( f(X) ) <= H(X)    for any (deterministic) function f  (proof later)
+      --> processing data (deterministically) can only decrease its information content
+
+------------------------------------------------------------------------------------------
+
+II : Why '- log p'
+--------------
+
+- describing (= coding) an integer from [1, 2^b] with b bits  (supposing the number b of bits is known in advance)
+  => ask b = log n binary questions : binary tree, = dichotomy
+
+- coding any event with - log p bits
+  . for n = 2^b, we saw, in the uniform case, as p = 1/n :   log n = - log p
+  . non uniform with p = negative powers of 2: still in -log p(event)   [previous example of the pie chart]
+  . general probability: in integer_rounding_up( -log p(event) )
+  . actually: we'll see later that -log p is achievable (no need of an integer number of bits: see if we were counting in base 3 [ternary questions, with log_3], or in nats [unit for ln = log_e]...)
+
+- entropy = E_{x~p}[information needed to describe the choice of an event x]
+   --> expectation of the information needed, considering the distribution law of X
+   --> average length to encode events from X
+
+- example : entropy of an English text, seen as random independent characters
+  . ASCII encoding: 256 possible characters ==> log(256) = 8 bits  (uniform law on 256 symbols)
+  . but not all 256 ASCII characters used, rather 27 (with space, forgetting punctuation and case) ==> log(27) = 4.8 (uniform law on 27 symbols)
+  . using character frequencies: H(English) = 4.1 
+     (see letter frequency in English: https://www.lri.fr/~gcharpia/machinelearningcourse/sessions/1/letter_freq.png taken from one of the articles about EEG https://www.lri.fr/~gcharpia/machinelearningcourse/EEG/
+      and the entropy table from McKay's book page 32: https://www.lri.fr/~gcharpia/machinelearningcourse/sessions/1/McKay_entropy_of_English.png )
+
+
+------------------------------------------------------------------------------------------
+
+III : Extensions
+----------------
+
+III-A : pairs of variables,  pair of laws
+-----------------------------------------
+
+- Conditional entropy:
+   . On a pair of variables, joint law (X,Y):   H(X,Y) = H( (X,Y) ) = - sum_ij p(x_i, y_j) log p(x_i, y_j)
+   . define H(Y|X) = average entropy of p(y|x) : sum_x p(x) H(Y|x) = E_{X~p}[ H(Y|X=x) ]  = sum_xy p(x,y) log p(y|x)
+   . 0 <= H(Y|X) <= H(Y)  
+   . H(X,Y) = H(X) + H(Y|X)  = H(Y) + H(X|Y)   (Bayes)
+
+- Mutual information
+   . note that H(X,Y) <= H(X) + H(Y) : information gain when describing X and Y together rather than separately
+   . entropy difference: 
+     I(X,Y) = H(X) + H(Y) - H(X,Y)   ( >= 0 )  information gain when considering X and Y together
+            = H(X) - H(X|Y)    information gain on encoding X when knowing Y
+            = H(Y) - H(Y|X)    information gain on encoding Y when knowing X
+   . symmetric (in X and Y)
+   . I(X,Y) >= 0
+   . I(X,Y) = 0 iff X and Y are independent (i.e. P(X,Y) = P(X) P(Y))
+
+- Information can only be lost by processing (proof):
+   . H( f(X) ) <= H(X)    for any (deterministic) function f
+       as H( (X,f(X)) ) = H(X) + H(f(X)|X) = H(f(X)) + H(X|f(X))
+                                   = 0                  >= 0
+
+- Relative entropy (a.k.a. Kullback-Leibler divergence)
+   . consider X ~ P and Y ~ Q : X,Y random variables following P,Q distributinos
+   . Kullback-Leibler divergence : 
+      KL(P||Q) = sum_i p_i log( p_i / qi )
+   . KL(P||Q) >= 0  (always)  known as Gibbs inequality
+   . KL(P||Q) = 0 only if the two distributions are identical (P = Q)
+   . not symmetric ( => not a distance, but used as a dissimilarity measure between distributions)
+   . KL(P||Q) = cross-entropy(P,Q) - H(P) 
+                  E_P[ -log(Q) ]
+      ==>  KL >= 0 means cross-entropy >= entropy, always!
+
+- Rewriting mutual information:
+   . I(X,Y) = KL( P(X,Y) || P(X)P(Y) )  : how far X and Y are from being independent, how far P(X,Y) is from P(X)P(Y)
+            = sum_x,y p(x,y) log( p(x,y) / p(x)p(y) )
+
+
+III-B : sequences of non-independent variables
+----------------------------------------------
+
+- For a sequence of n variables: H(X1, X2, ... Xn) = H(X1) + H(X2|X1) + H(X3|X1,X2) + ... + H(Xn|X1,X2...X_{n-1})
+
+- Entropy rate of a process: if variables are not independent
+   - definition: H(process X) = lim_{n -> infinity}  H(X1,X2...,Xn)/n
+   - for a stationary process, it is also equal to the asymptotic information per new variable: lim_{n -> infinity} H(Xn|X1,X2,...X_{n-1})
+   - examples:
+      . iid : H(X) = H(X1)
+      . Markov chain : H(X) = H(X2|X1)
+
+
+III-C : Continuous distributions
+--------------------------------
+
+- From discrete to continuous distributions
+   . continuous space X with probability density p
+   . discretize in small intervals of size delta : X_delta = {x1, x2, ...} with x1 coding for [x1-delta/2, x1+delta/2] and p_delta(x1) := p([that interval])
+   . H(X_delta) = - \sum_i p_delta(x_i) log p_delta(x_i)
+                ~ - \sum_i delta p(x_i) log p(x_i)  -  log delta   with log delta --> - infinity  
+   .  H(X_delta) + log delta --> - \int_X p(x) log p(x) dx      
+   . Differential entropy: H(X) = - \int_X p(x) log p(x) dx
+   . BEWARE! this is not necessarily >= 0 
+
+   . KL(P||Q) = \int_X p(x) log q(x)/p(x) dx
+   . same properties as before, including KL(P||Q) >= 0
+   . very useful quantity to compare distributions, quantify how far they are apart (though it is not a distance because not symmetric)
+
+
+
+III-D : Noisy channels and example of application
+-------------------------------------------------
+
+- Example of EEG headset : type letters just by focusing on them (no muscle used) or control a mouse just by thinking left/right
+   . demo: http://www.youtube.com/watch?v=NlUPFpZswJk
+   . reading the brain = verrrrry noisy
+   . maximize information retrieved by optimizing protocol
+   . flashing the letter we focus on = big activation in some part of the brain => detectable with the headset sensors (with high noise)
+   . optimal way to flash letters to guess which one we're focusing on?
+   . takes a few seconds per letter (to cancel out noise by accumulating evidence from the detection of several flashes)
+   . example of flash-letter codes : articles at https://www.lri.fr/~gcharpia/machinelearningcourse/EEG/
+
+- For your information (not in this course's program): 
+   Noisy-channel coding theorem (Shannon, 1948):
+    . Transmitter : X --> noisy channel --> Y : receiver
+    . Capacity: C = sup_{p_X} I(X,Y)
+    . For any epsilon > 0 and for any transmission rate R less than the channel capacity C, there is an encoding and decoding scheme transmitting data at rate R whose error probability is less than epsilon, for a sufficiently large block length. 
+    . Also, for any rate greater than the channel capacity, the probability of error at the receiver goes to one as the block length goes to infinity.
+
+
+------------------------------------------------------------------------------------------
+
+Next
+----
+
+- we know how to quantify the information provided by the choice of a random variable from a known distribution. How do we use it? How to encode this information? ==> links with compression.
+- wrong distribution ==> more information needed to describe events
+- all information about the data is not taken into account with this use of entropy, which supposes that variables are chosen independently of the previous ones. Consider a text... characters depend on the previous ones. Can do better!
+
+------------------------------------------------------------------------------------------

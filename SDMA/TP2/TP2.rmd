@@ -1,0 +1,459 @@
+---
+title: 'SMDA - TP2: Modèles de regression linéaire Ridge et Lasso'
+author: "Maha ELBAYAD"
+date: "15 Novembre 2015"
+header-includes:
+   - \usepackage{amsmath,hyperref,float}
+output:
+  pdf_document:
+    highlight: pygments
+---
+
+```{r, echo=FALSE,include=FALSE}
+library(xtable)
+library(MASS)
+library(lars)
+
+options(xtable.comment = FALSE)
+options(xtable.align = 'center')
+
+```
+#Application I: Modèle de régression linéeaire
+##Préliminaires
+```{r, echo=FALSE}
+uscrime=read.table("data/UsCrime.txt",header=T,sep='\t');
+str(uscrime)
+Y=uscrime$R;
+Features=subset(uscrime, select = -c(R) )
+n=nrow(Features)
+p=ncol(Features)
+C=round(cor(Features),2)
+C[upper.tri(C, diag = FALSE)]=""
+I=which((as.numeric(C) > .7 | -as.numeric(C)>.7) & C!=1,arr.ind = TRUE);
+C[I]=paste('\\textbf{ ',C[I],'}');
+```
+
+Dans le fichier 'UsCrime.txt' on dispose de 47 observations de 14 variables.
+
+**La matrice de corrélation entre les différentes variables:**
+
+```{r, results='asis',echo=FALSE}
+print(xtable(C,align=rep("c",14)),sanitize.text.function = function(x) x)
+```
+
+```{r, echo=FALSE, fig.height=11,fig.width=9}
+pairs(~.,data=Features, main="Nuage des points",pch=19,cex=.1)
+```
+On remarque que certaines covariables sont fortement corrélés, notamment ('Ex0', 'Ex1') et ('X','W')
+
+##Le modèle:
+On considère le modèle linéaire:
+$$Y=X\beta+\epsilon,\:\epsilon\sim\mathcal N(0,\sigma^2)$$
+
+###1.Résultats _lm()_:
+
+```{r,echo=FALSE}
+model.lin=lm(R~.,data=uscrime)
+Coeffs=round(as.matrix(summary(model.lin)$coefficients[,c(1,4)]),3);
+signif=rep("",nrow(Coeffs));
+signif[which(Coeffs[,2]<.1)]="\\textbullet";
+signif[which(Coeffs[,2]<.05)]="*";
+signif[which(Coeffs[,2]<.01)]="**";
+signif[which(Coeffs[,2]<.001)]="***";
+Coeffs=cbind(Coeffs,signif)
+F=as.numeric(summary(model.lin)$fstatistic);
+pv=pf(F[1],F[2],F[3],lower.tail=FALSE)
+```
+
+```{r, results='asis',echo=FALSE}
+print(xtable(Coeffs,align=rep("c",4),caption='Coefficients estimés $\\beta$',digits = c(0,2,5,0),label="tab:coeffs"),sanitize.text.function=identity)
+```
+
+###2. Le modèle global:
+le coefficient de détermination $R^2$ mesure de la qualité du modèle linéaire
+$$R^2=\dfrac{var(\hat Y)}{var(Y)}=\dfrac{\sum_{i=1}^n(\hat y_i-\bar y)^2}{\sum_{i=1}^n(y_i-\bar y)^2},\:où\:\hat Y=X\hat\beta$$
+Dans notre cas $R^2=`r summary(model.lin)$r.squared`$, plus $R^2$ est proche de 1, plus les covariables expliquent parfaitement la cible.
+
+Pour évaluer la signifiance du modèle on considère la statistique de Fisher:
+$$F=\frac{R^2(n-p-1)}{p(1-R^2)}\sim F_{p,n-p-1}(1-\alpha)$$
+Le test a pour hypothèses.^[On exclut $\beta_0$ la constante de régression]:
+$$\begin{cases}
+H_0:\:\beta_1=\beta_2=...=\beta_{13}=0\\
+H_1:\:\exists j\in\{1...13\},\:\beta_j\neq 0
+\end{cases}$$
+Au seuil critique $\alpha$ on rejète $H_0$ i.e on considère que la regression est significative si $F>q_{\alpha}$ soit une $p-value<\alpha$.
+Dans notre modèle $F=`r as.numeric(F[1])`$ avec une $p-value=`r signif(pv,4)`$. Comme la p\-value est très petite on conclut que le modèle linéaire est retenu.
+
+###3. Les coefficients du modèle:
+Pour chaque covariable on considère le test de significativité de $\beta_j$ avec la statistique de student.
+$$T=\dfrac{\hat\beta_j}{SE(\hat\beta_j)}=\dfrac{\hat\beta_j}{\sqrt{\hat\sigma^2S_{j,j}}},\:S_{j,j}\text{ jème terme diagonal de} (X^TX)^{-1}$$
+Le test a pour hypothèses:
+$$\begin{cases}
+H_0:\:\beta_j=0\\
+H_1:\:\beta_j\neq 0
+\end{cases}$$
+Au seuil critique $\alpha$ on rejète $H_0$ si $T>t_{n-p}(1-\frac{\alpha}{2})$ ou $p-value<\alpha$.
+
+Dans les $p-values$ du tableau \ref{tab:coeffs}, on voit que les covaribales avec les plus petites p-values sont plus significatives ($***$: p-value <.001, $**$: p-value <.01, $*$: p-value <.05,\textbullet: p-value <.1). Pour ce modèle particulier, les covariables \{Ed,Age,U2,X\} s'avèrenet plus significatives, mais comme les covariables ont de fortes corrélation on ne peut virer les covariables qui paraissent à priori sans utilité.
+
+```{r, echo=FALSE}
+I1=as.matrix(confint(model.lin,level=.95))
+colnames(I1)=c("2.5\\%","97.5\\%")
+I2=as.matrix(confint(model.lin,level=.99))
+colnames(I2)=c("0.5\\%","99.5\\%")
+```
+
+```{r, results='asis',echo=FALSE}
+print(xtable(I1,caption='Intervalles de confiance au risque de 5\\%'),sanitize.text.function=identity)
+print(xtable(I2,caption='Intervalles de confiance au risque de 1\\%'),sanitize.text.function=identity)
+```
+
+La p-value de la question précédente présente la probabilité de se retrouver en dehors de l'intervalle de confiance. La constante de régression (intercept), Ed et X étant les seules avec p-value<.01, leurs intervalles de confiance au risque de 1% ne comprennet pas la valeur 0. Pour Age et U2 les intervalles de confiance(5%) ne comprennent plus 0 comme leurs p-value est <.05.
+
+###4. Etude des valeurs prédites:
+
+```{r,echo=FALSE,fig.height=4}
+Yhat=model.lin$fitted.values;
+plot(Y,Yhat,pch=19,cex=.4,xlab="variable cible observée",ylab="variable cible prédite")
+abline(a=0,b=1,col='red',lty=2,lwd=2)
+```
+
+```{r,echo=FALSE,include=FALSE}
+#Intervalles de confiance:
+Conf=predict(model.lin, Features, level = 0.95, interval = "confidence")
+Conf1=Conf[1:11,]
+Conf2=Conf[12:22,]
+Conf3=Conf[23:33,]
+Conf4=Conf[34:44,]
+Conf5=Conf[45:47,]
+```
+
+On remarque que les points sont tous proches de la première bissectrice (y=x) le modèle est donc valide.
+
+```{r,results='asis',echo=FALSE}
+print(xtable(t(Conf1)),sanitize.text.function=identity,table.placement="H")
+print(xtable(t(Conf2)),sanitize.text.function=identity,table.placement="H")
+print(xtable(t(Conf3)),sanitize.text.function=identity,table.placement="H")
+print(xtable(t(Conf4)),sanitize.text.function=identity,table.placement="H")
+print(xtable(t(Conf5)),sanitize.text.function=identity,table.placement="H")
+```
+
+```{r,echo=FALSE,fig.height=4}
+plot(Yhat,type='o',pch=19,cex=.4,xlab="observation",ylab="Prédiction",col='black')
+matlines(Conf[,2:3],col=c('red','blue'),lty=2)
+legend('topright',cex=.7,col=c('black','blue','red'),lty=c(1,2,2),legend=c('prédiction','IC borne sup','IC borne inf'))
+
+#Résidus:
+RES=model.lin$residuals;
+```
+
+###5. Etude des résidus:
+L'erreur quadratique des résidus $RSE=\|\hat\epsilon\|_2^2=`r sum(RES^2)`$.
+
+On pose $\hat\sigma^2=\dfrac{\|\hat\epsilon\|_2^2}{n-p}$. Avec le théorème de Cochran on peut écrire: $\|\hat\epsilon\|_2^2\sim \sigma^2\chi^2(n-p)$. Ainsi notre estimateur de $\sigma^2$ est sans biais $(E(\hat\sigma^2)=\sigma^2)$.
+\[\hat\sigma^2=`r sum(RES^2)/(n-p)`\]
+
+```{r,echo=FALSE,fig.height=4}
+par(mfrow=c(1,2))
+plot(Yhat,RES,pch=19,cex=.4,xlab="variable cible prédite",ylab="Résidu")
+abline(h=0,col='red',lty=2,lwd=2)
+qqnorm(RES,main="",cex=.6)
+qqline(RES,lwd=2,col=2,lty=2)
+abline(mean(RES), sd(RES),col=4,lty=2,lwd=2)
+legend('topleft',legend=c(expression(paste(y,plain('='),sigma*x+mu)),'qqline'),lty=2,lwd=2,col=c(4,2))
+```
+
+On effectue le test de Shapiro-Wilk de normalité, $H_0$ : $\hat\epsilon$ suit une loi normale, donc si p-value < 0.01, l'échantillon ne suit pas une loi normale.
+Pour ce modèle p-value=`r shapiro.test(RES)$p.value`.
+Graphiquement, on remarque que les résidus sont distribués de façon aléatoire ($\sim\mathcal N(0,\sigma^2)$), ils ne semblent plus contenir d'information. Sur le graphe Q.Q aucun point aberrant n'a été soulevé et tous les résidus sont alignés sur la droite $y=\sigma x+\mu \sim qqline=D(Q1, Q3)$. On constate aussi que les résidus sont plutôt hétéroscédastiques.
+
+###6. Performances du moèle sur de nouvelles données:
+
+```{r,echo=FALSE,include=FALSE}
+indTest=seq(1,n,by=3)
+tabTest=uscrime[indTest,]
+tabTrain=uscrime[-indTest,]
+model.tt=lm(R~.,data=tabTrain)
+YP=predict(model.tt, new=tabTest)
+RES=tabTest$R-YP
+```
+
+ - La moyenne des erreurs quadratiques$=`r round(sum(RES^2),3)`$.
+ 
+ - La moyenee des erreurs $=`r round(mean(RES),3)`$ 
+ 
+ - L'écart type des erreurs quadratiques$=`r round(sd(RES),3)`$.
+
+```{r, echo=FALSE,fig.height=4}
+par(mfrow=c(1,2))
+plot(YP,RES,xlab="cible prédite",ylab="Résidus",pch=19,cex=.4)
+abline(h=0,col='red',lty=2,lwd=2)
+qqnorm(RES,main="",cex=.6)
+qqline(RES,lwd=2,col=2,lty=2)
+abline(mean(RES), sd(RES),col=4,lty=2,lwd=2)
+legend('topleft',legend=c(expression(paste(y,plain('='),sigma*x+mu)),'qqline'),lty=2,lwd=2,col=c(4,2))
+```
+
+Sur les données du Test set, les résidus ont une moyenne $\neq 0$ et sur le qq-plot on voit que la droite du 1er quartile- 3ème quartile est écratée de $y=\mu+\sigma x$.
+
+**Les graphiques _lm_**:
+
+```{r, echo=FALSE,fig.height=4}
+par(mfrow=c(1,2))
+plot(model.lin,main="Modèle global",which = 1:2,cex=.5)
+plot(model.lin,main="Modèle global",which =c(3,5),cex=.5)
+plot(model.tt,main="Modèle partiel",which = 1:2,cex=.5)
+plot(model.tt,main="Modèle partiel",which =c(3,5),cex=.5)
+
+```
+
+Sur le graphe 'Residuals vs fitted' on vérifie l'hypothèse d'homoscédasticité: variance constante des résidus pour chaque prédiction $\hat y$. Le graphe scale-location nous permet de repérer les outliers: points qui ont des résidus studentisés >3. Le QQ-plot teste l'hypothèse de normalité des résidus. 
+Le dernier graphe Residuals vs Leverage montre l'impact de chaque observation sur le modèle et permet de repérer les points leviers avec une large distance de Cook $\propto$ différence entre les valeurs prédites avec et sans l'observation en question.
+
+##Sélection de modèles:
+###1. Régression _Backward_:
+
+Dans la sélection _Backward_, on retire du modèle le régresseur non significatif qui porte le score AIC le plus faible.
+Dans le modèe linéaire des _UScrime_ on retire dans l'ordre: NW, LF, N,S,Ex1, M,U1.
+le modèle final est donc: 
+$$R \sim Age + Ed + Ex0 + U2 + W + X$$
+
+```{r,echo=FALSE,include=FALSE}
+null=lm(R~1, data=uscrime)
+full=lm(R~., data=uscrime)
+regbackward=step(full, scope=list(lower=null, upper=full), direction="backward")
+Coeffs=round(as.matrix(summary(regbackward)$coefficients[,c(1,4)]),3);
+signif=rep("",nrow(Coeffs));
+signif[which(Coeffs[,2]<.1)]="\\textbullet";
+signif[which(Coeffs[,2]<.05)]="*";
+signif[which(Coeffs[,2]<.01)]="**";
+signif[which(Coeffs[,2]<.001)]="***";
+Coeffs=cbind(Coeffs,signif)
+```
+
+```{r, results='asis',echo=FALSE}
+print(xtable(Coeffs,align=rep("c",4),caption='Coefficients estimés $\\beta$ - sélection backward',digits = c(0,2,5,0),label="tab:coeffs"),sanitize.text.function=identity)
+```
+
+**Comparaison avec le modèle initial:**
+
+```{r,echo=FALSE,include=FALSE}
+Rsq=c('$R^2$',round(summary(model.lin)$r.squared,3),round(summary(regbackward)$r.squared,3))
+aRsq=c('$R^2_{adj}$',round(summary(model.lin)$adj.r.squared,3),round(summary(regbackward)$adj.r.squared,3))
+F=as.numeric(summary(model.lin)$fstatistic);
+pv1=pf(F[1],F[2],F[3],lower.tail=FALSE)
+F=as.numeric(summary(regbackward)$fstatistic);
+pv2=pf(F[1],F[2],F[3],lower.tail=FALSE)
+fstat=c('F-stat p-value',signif(pv1,4),signif(pv2,4))
+comp=rbind(Rsq,aRsq,fstat)
+colnames(comp)=c('stat','Modèle complet','Modèle backward');
+```
+
+```{r, results='asis',echo=FALSE}
+print(xtable(comp),sanitize.text.function = function(x) x,include.rownames=FALSE)
+```
+On constate que le modèle _backward_ est plus performant.^[$R^2_{adj}$ prenant en considération le nombre de covariables est donc la plus appropriée pour comparer les deux modèles] et avec des régresseurs tous significatifs.
+
+###2. Régression _Forward_:
+
+```{r, echo=FALSE, include=FALSE}
+regforward=step(null, scope=list(lower=null, upper=full), direction="forward")
+```
+
+Similaire à la sélection _Backward_, cette fois on ajoute au modèle le régresseur avec le plus petit AIC.
+Dans le modèe linéaire des _UScrime_ on ajoute dans l'ordre: Ex0,X,Ed,Age,U2,W.
+le modèle final est donc: 
+$$ R \sim Ex0 + X + Ed + Age + U2 + W$$
+On se retrouve alors avec le même modèle qu'en sélection _Backward_. 
+L'approche _Backward_ ou _Forward_ ne prend pas en considération la corrélation entre les régresseurs, l'ajout ou la supression dans une étape altèrent  la signifiance des regresseurs sélectionnés.
+
+###3. Régression _Stepwise_:
+Dans l'apprche _Stepwise_  on part du modèle gloabl (ou du modèle null) et à chaque étape k
+on ajoute ou on retire le regresseur avec le moins d'impact sur le AIC global du modèle. On s'arrête lorsque le modèle se stabilise.
+
+On effectue les ajouts/supression suivantes:
+- NW  - LF -N -S -EX1 - M -U1
+Pour finir avec le même modèle que dans les sélections précédentes:
+$$R \sim Age + Ed + Ex0 + U2 + W + X$$
+
+```{r, echo=FALSE, include=FALSE}
+regboth=step(null, scope=list(lower=null, upper=full), direction="forward")
+```
+
+###5. Sélection avec BIC
+Pour substituer AIC par BIC , on choisit $k=log(n)$.
+Les régresseurs sélectionnés en _Stepwise_ sont dans l'ordre: +Ex0 + X + Ed + Age + U2
+Le modèle final :
+$$R \sim Ex0 + X + Ed + Age + U2$$
+On retrouve ce même modèle en sélection _Backward_ ou _Forward_.
+
+```{r, echo=FALSE, include=FALSE}
+regboth=step(null, scope=list(lower=null, upper=full), direction="both",k=log(nrow(uscrime)))
+regforward=step(null, scope=list(lower=null, upper=full), direction="forward",k=log(nrow(uscrime)))
+regbackward=step(full, scope=list(lower=null, upper=full), direction="backward",k=log(nrow(uscrime)))
+Rsq=append(Rsq,round(summary(regboth)$r.squared,3))
+aRsq=append(aRsq,round(summary(regboth)$adj.r.squared,3))
+F=as.numeric(summary(regboth)$fstatistic);
+pv3=pf(F[1],F[2],F[3],lower.tail=FALSE)
+fstat=append(fstat,signif(pv3,4))
+comp=rbind(Rsq,aRsq,fstat)
+colnames(comp)=c('stat','Modèle complet','Modèle AIC', 'modèle BIC');
+```
+
+```{r, results='asis',echo=FALSE}
+print(xtable(comp),sanitize.text.function = function(x) x,include.rownames=FALSE)
+```
+
+
+#Application II: Régression Ridge et Lasso:
+##Préliminaires
+
+###1,2,3.
+Dans le fichier \textit{usa\_indicators.txt}, on dispose de 14 observations de 110 variables. Comme $n\ll p$, un modèle de régression linéaire simple n'est pas pertinent ($X^TX$ singulière).
+
+La variable cible est: EN.ATM.CO2E.KT (CO2 emissions (kt)) dont une partie est la variable EN.CO2.BLDG.MT (CO2 emissions from residential buildings and commercial and public services (million metric tons))
+
+```{r, echo=FALSE,fig.height=3}
+usCO2=read.table("data/usa_indicators.txt",header=T,sep=';');
+plot(usCO2$Year,usCO2$EN.ATM.CO2E.KT,pch=19,type='o',ylab="Emission CO2 (kt)",xlab="Année",main="Evolution des émissions CO2 entre 1996 et 2009")
+#Suppression de la variable 'Year':
+usCO2=subset(usCO2, select = -c(Year) )
+usCO2=as.data.frame(scale(usCO2, center=FALSE))
+```
+
+###4.
+Avoir des données de nature très diverse en entrée du modèle, ralentit la convergence vers une solution si on utilise la méthode du gradient. lm() utilisant une décomposition QR pour trouver les paramètres du modèle, la normalisation des régresseurs premet tout juste d'avoir des poids $\beta$ interprétables.
+
+##Regression Ridge:
+
+###1.
+La régression Ridge consiste à minimiser la fonction cost:
+$$E(\beta)=\|Y-X\beta\|^2,\:\text{sous la contrainte }\|\beta\|_2^2\leq c$$
+
+###2.
+On effectue la ridge régression avec $\lambda=0$ puis $\lambda=100$, on liste dessous les 5 régresseurs les plus influents pour les deux modèles. On note que model$coef ne sont pas dans la bonne échelle, on utilise coeff(model) pour extraire les coefficients du modèle.
+
+
+```{r,echo=FALSE}
+ridge.0=lm.ridge(EN.ATM.CO2E.KT~., data=usCO2,lambda=0)
+ridge.100=lm.ridge(EN.ATM.CO2E.KT~., data=usCO2,lambda=100)
+
+C.0=coef(ridge.0)
+names(C.0)[1]="Intercept"
+index.0=sort(abs(C.0),index.return=TRUE,decreasing=T)$ix[1:5]
+C.0=C.0[index.0]
+
+C.100=coef(ridge.100)
+names(C.100)[1]="Intercept"
+index.100=sort(abs(C.100),index.return=TRUE,decreasing=T)$ix[1:5]
+C.100=C.100[index.100]
+
+C=rbind(names(C.0),signif(as.numeric(C.0),3),names(C.100),signif(as.numeric(C.100),3))
+rownames(C)=c("$\\lambda=0$","-","$\\lambda=100$","-");
+```
+
+
+```{r,results='asis',echo=FALSE}
+print(xtable(t(C)),sanitize.text.function=identity,include.rownames=FALSE)
+```
+Où:
+
+- AG.LND.TOTL.K2: Land area (sq. km)
+
+- EG.USE.COMM.FO.ZS: Fossil fuel energy consumption (% of total)
+
+- SP.RUR.TOTL: Rural population
+
+- AG.LND.AGRI.K2: Agricultural land (sq. km)
+
+- AG.SRF.TOTL.K2: Surface area (sq. km)
+
+Ces régresseurs sont vraisemblables, si on prend en considération que, par exemple, le coefficient pour la poulation rurale (<0) a absorbé ceux de la population totale et de la population urbane du fait de leur forte corrélation.
+
+###3.
+On effectue une régression ridge pour $\lambda$  allant de 0 à 100 par pas de 0.01 et on trace la croube de l'erreur Cv pour chaque $\lambda$ ainsi que les différents coefficients du modèle.
+
+```{r,echo=FALSE,fig.height=4}
+L=seq(0, 100, 0.01)
+ridge=lm.ridge(EN.ATM.CO2E.KT~., data=usCO2,lambda=L)
+plot(L,ridge$GCV,xlab=expression(lambda),ylab='Cross-validation',cex=.2)
+title('Erreur de cross-validation',line=.5,cex.main=.8)
+par(mfrow=c(1,2))
+plot(ridge)
+coeffs.ridge=coef(ridge)[which.min(ridge$GCV),]
+plot(coeffs.ridge,cex=.2,xlab='j',ylab=expression(beta[j]),col=2)
+title('Coefficients du modèle optimal',line=.5,cex.main=.8)
+
+```
+
+On voit bien que les coefficients tendent à s'annuler quand on augmente la valeur de $\lambda$. Cependant, le modèle optimal, ayant la plus petite erreur CV correspond à $\lambda=`r L[which.min(ridge$GCV)]`$ (ou plûtot la plus petite valeur non nulle de $\lambda$ qu'on donne au modèle). Les coefficients pour $\lambda=`r L[which.min(ridge$GCV)]`$ sont affichés dans le graphe ci-dessus.
+
+###4. Erreur quadratique du modèle optimal ($\lambda=`r L[which.min(ridge$GCV)]`$):
+
+```{r,echo=FALSE}
+X=subset(usCO2, select = -c(EN.ATM.CO2E.KT) )
+X.intercept=cbind(1,as.matrix(X))
+Yhat.ridge=t(X.intercept%*%as.vector(coeffs.ridge))
+Y=usCO2$EN.ATM.CO2E.KT
+RSE.ridge=mean((Y-Yhat.ridge)^2)
+```
+
+On obtient une erreur quadratique moyenne de $`r signif(RSE.ridge,4)`$.
+
+##Regression Lasso:
+###1.
+La régression Lasso consiste à minimiser la fonction cost:
+$$E(\beta)=\|Y-X\beta\|^2,\:\text{sous la contrainte }\|\beta\|_1\leq c$$
+
+###2.
+Le graphe ci-dessous compare les chemins de régularisation
+en traçant l'évolution des coefficients pour différentes valeurs de $\lambda$. Les $\lambda$ de chaque étape lasso sont visualisés dans la figure de droite.
+
+```{r,echo=FALSE,fig.height=4.5}
+lasso=lars(as.matrix(X),as.vector(Y),type="lasso")
+par(mfrow=c(1,2))
+plot(lasso)
+plot(lasso$lambda,xlab="lasso step",ylab=expression(lambda),pch=19,cex=.5,col=2)
+
+```
+
+###3.
+Pour $\lambda=0$ on estime les coefficients du modèle LASSO. Il s'agit d'un modèle sans régularisation sur l'ensemble des régresseurs choisis par LASSO. 
+
+```{r,echo=FALSE,fig.height=4}
+C.0=predict.lars(lasso,X,type="coefficients",mode="lambda",s=0)$coefficients
+plot(C.0,cex=.2,xlab='j',ylab=expression(beta[j]),col=2)
+```
+
+###4.
+On estime de nouveau les coefficients pour $\lambda\in\{.02, .04, .06\}$
+
+```{r,echo=FALSE,fig.height=4}
+C=predict.lars(lasso,X,type="coefficients",mode="lambda",s=c(.02,.04,.06))$coefficients
+plot(c(),xlim=range(1,ncol(X)),ylim=c(min(C),max(C)),main='Coefficients Lasso',cex.main=.8,xlab='j',ylab=expression(beta[j]))
+matlines(1:ncol(X),t(C),xlab='j',ylab=expression(beta[j]),col=c(1,2,3),lty=1,type = "p",pch=19,cex=.3)
+legend('topright',legend=c(expression(paste(lambda,plain('='),.02)),expression(paste(lambda,plain('='),.04)),expression(paste(lambda,plain('='),.06))),pch=19,col=c(1,2,3))
+
+I=which(C[1,]!=0)
+```
+
+En augmentant $\lambda$ on force les coefficients de plus en plus à s'annuler pour minimiser $\|\beta\|_1$.
+avec $\lambda.02$ on se trouve déjà avec seulement 5 régresseurs qui semblent plus vraisemblables que les variables Ridge en substituant par exemple des variables de surface par des variables économiques de l'industrie agroalimentaire.
+ 
+ - EG.ELC.COAL.KH: Electricity production from coal sources (kWh)
+ 
+ - EG.IMP.CONS.ZS: Energy imports, net (% of energy use)
+ 
+ - EG.USE.COMM.KT.OE: Energy use (kt of oil equivalent)
+ 
+ - TM.VAL.FOOD.ZS.UN: Food imports (% of merchandise imports)
+ 
+ - TX.VAL.FOOD.ZS.UN: Food exports (% of merchandise exports) 
+ 
+###5. Erreur quadratique moyenne:
+```{r,echo=FALSE}
+Yhat.lasso=predict.lars(lasso,X,type="fit",mode="lambda",s=0.06)$fit
+RSE.lasso=mean((Y-Yhat.lasso)^2)
+```
+
+On obtient une erreur quadratique moyenne de $`r signif(RSE.lasso,4)`$, ce qui est plus important que l'erreur de la régression Ridge, cependant le modèle LASSO est plus sparse comparé aux coefficients de Ridge qui sont certes très petits mais $\neq 0$. Il faut aussi rappeler qu'on a $p\gg n$ est donc considérer toutes les variables n'est pas consistant.

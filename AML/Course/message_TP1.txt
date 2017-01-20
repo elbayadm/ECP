@@ -1,0 +1,38 @@
+In problem 3 we show :
+
+   - ln p(D) = - E_{beta} [ln p(D|theta)] + KL(beta||alpha) - KL(beta||pi)
+
+where
+ . D is the data observed
+ . p(D) is its probability (as coming from a distribution in the real world)
+ . we have a family of models M(theta), with parameters theta
+ . alpha(theta) is a prior over theta
+ . pi(theta) = p(theta|D) is the posterior, i.e. the distribution over theta which fits the best the data (the most likely parameters)
+ . beta(theta) is a distribution over theta, which we try to optimize
+
+The goal is to find the best parameters theta so that the model M(theta) fits the data the best.
+Actually we search rather for a distribution of such parameters. We name beta(theta) our candidate distribution, that we try to optimize.
+The target distribution is pi(theta) : we would like beta(theta) to be as close as possible to pi(theta). Unfortunately, we don't know pi(theta) as it is most often very hard to estimate.
+How to estimate beta(theta) then?
+
+We notice that in the equation
+
+   - ln p(D) = - E_{beta} [ln p(D|theta)] + KL(beta||alpha) - KL(beta||pi)
+
+the left side is constant (it does not depend on theta or beta).
+We notice that the first 2 terms on the right side do not depend on pi, while the last one does.
+The last term KL(beta||pi) quantifies how far beta is from pi : this is the quantity we want to minimize.
+Minimizing KL(beta||pi) is equivalent to minimizing  - E_{beta} [ln p(D|theta)] + KL(beta||alpha), as their difference is a constant.
+Therefore, machine learning problems can be written generally as:
+
+
+find the distribution beta (over model parameters theta) which minimizes 
+
+      - E_{beta} [ln p(D|theta)] + KL(beta||alpha)
+
+
+The first term quantifies how likely obtaining this data D was, under our distribution beta(theta) of models M(theta),
+the second term quantifies how far our distribution beta(theta) is from our prior alpha(theta).
+
+This method is known as "variational inference".
+

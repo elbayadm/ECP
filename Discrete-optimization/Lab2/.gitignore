@@ -1,0 +1,5 @@
+testing/
+training/
+kruskal_*
+prim_*
+runtime.txt

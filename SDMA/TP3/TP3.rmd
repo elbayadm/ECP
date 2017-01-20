@@ -1,0 +1,401 @@
+---
+title: |
+  | SDMA - TP3
+  | Analyse discriminante
+  | Régression logistique
+  
+author: "Maha ELBAYAD"
+date: "8 Décembre 2015"
+header-includes:
+   - \usepackage{float,graphicx}
+output:
+  pdf_document:
+    highlight: pygments
+---
+
+```{r, echo=FALSE,include=FALSE}
+library(MASS)
+library(xtable)
+library(ROCR)
+options(xtable.comment = FALSE)
+options(xtable.table.placement = "H")
+
+colors=c('salmon','mediumseagreen','blue4','indianred4','darkgoldenrod1','deepskyblue','deeppink3')
+```
+
+#Analyse Discriminante
+
+##Données de l'étude:
+
+Base de données **Iris**:
+
+- Taille de l'échantillon: `r nrow(iris)`
+
+- Nombre de covariables: `r ncol(iris)`  
+
+##Covariables numériques:
+```{r, echo=FALSE,results='asis'}
+print(xtable(summary(iris)[,1:4]),include.rownames=F)
+```
+
+##Moyenne des covariables par espèce: 
+```{r, echo=FALSE,results='asis'}
+cat=cbind(tapply(iris$Species,iris$Species,length),
+      tapply(iris$Sepal.Length,iris$Species,mean),
+      tapply(iris$Sepal.Width,iris$Species,mean),
+      tapply(iris$Petal.Length,iris$Species,mean),
+      tapply(iris$Petal.Width,iris$Species,mean))
+colnames(cat)=c('Effectif',names(iris)[1:4])
+print(xtable(cat),include.rownames=T)
+```
+
+```{r, echo=FALSE,include=FALSE}
+nrow(iris); col(iris); dim(iris); names(iris);
+iris[1,]; iris[,5]; iris$Species;
+levels(iris$Species); nlevels(iris$Species)
+tapply(iris$Species,iris$Species,length)
+```
+
+```{r, echo=FALSE,fig.height=9,fig.align='center'}
+plot(iris,pch=19,cex=.3,main="Iris")
+plot(iris,col=colors[iris$Species],pch=19,cex=.3,main='Iris par espèce')
+```
+
+
+
+## Analyse discriminante linéaire prédictive (ADL) (librairie MASS)
+
+**Prior:**
+
+```{r,echo=F,results='asis'}
+model.lda.1=lda(Species~.,data=iris)
+print(xtable(t(model.lda.1$prior)),include.rownames=F)
+```
+Comme on a autant d'exemples dans chaque espèce le prior est équiréparti.
+
+**Règles de décision:**
+
+```{r,echo=F,results='asis'}
+xtable(model.lda.1$scaling)
+```
+
+La frontière de décision _LD1_ permet de séparer la classe _setosa_ des deux autres classes. Elle a une forte trace de 0.9912. Alors que _LD2_ est peu performante.
+
+La fonction plot de la classe _LDA_ affiche la projection des samples sur les deux frontières de décision (LD1,LD2)
+
+```{r,echo=F,fig.align='center',fig.height=5}
+plot(model.lda.1,main='LDA : Iris',cex=.5,font=2)
+```
+
+\newpage
+##Apprentissage/Test:
+
+```{r,echo=F}
+set.seed(13)
+train.2=sample(nrow(iris),floor(nrow(iris)*.8))
+model.lda.2=lda(Species~.,data=iris[train.2,])
+#Prédictions sur la base de test:
+pred=predict(model.lda.2,iris[-train.2,])
+pred.class.lda.2=apply(pred$posterior,1,which.max)
+#Prédiction sur la base d'apprentissage:
+pred.train=predict(model.lda.2,iris[train.2,])
+err.train.lda.2=sum(as.numeric(iris[train.2,5])!=apply(pred.train$posterior,1,which.max))/length(train.2)
+```
+
+**Matrice de confusion -1:**
+
+Avec 1:setosa 2:versicolor 3:virginica 
+```{r,echo=F,results='asis'}
+true.class.2=as.numeric(iris[-train.2,5])
+confusion=table(true=true.class.2,pred=pred.class.lda.2)
+rownames(confusion)=paste('true',rownames(confusion))
+colnames(confusion)=paste('pred',colnames(confusion))
+#Erreur par classe:
+Erreur=rowSums(confusion-diag(confusion)*diag(3))/rowSums(confusion)
+xtable(cbind(confusion,Erreur),digits=c(rep(0,4),2))
+#Erreur totale:
+err.lda.2=sum(true.class.2!=pred.class.lda.2)/length(true.class.2)
+```
+
+L'erreur sur la base de test est de `r round(err.lda.2*100,2)`% contre `r round(err.train.lda.2*100,2)`% sur la base d'apprentissage.
+
+
+**Matrice de confusion -2:**
+
+```{r,echo=F,results='asis'}
+train.3=sample(nrow(iris),floor(nrow(iris)*.8))
+model.lda.3=lda(Species~.,data=iris[train.3,])
+#Prédictions sur la base de test:
+pred=predict(model.lda.3,iris[-train.3,])
+pred.class.lda.3=apply(pred$posterior,1,which.max)
+true.class.3=as.numeric(iris[-train.3,5])
+confusion=table(true=true.class.3,pred=pred.class.lda.3)
+rownames(confusion)=paste('true',rownames(confusion))
+colnames(confusion)=paste('pred',colnames(confusion))
+#Prédiction sur la base d'apprentissage:
+pred.train=predict(model.lda.3,iris[train.3,])
+err.train.lda.3=sum(as.numeric(iris[train.3,5])!=apply(pred.train$posterior,1,which.max))/length(train.3)
+#Erreur par classe:
+Erreur=rowSums(confusion-diag(confusion)*diag(3))/rowSums(confusion)
+xtable(cbind(confusion,Erreur),digits=c(rep(0,4),2))
+#Erreur totale:
+err.lda.3=sum(true.class.3!=pred.class.lda.3)/length(true.class.3)
+```
+
+L'erreur sur la base de test est de `r round(err.lda.3*100,2)`% contre `r round(err.train.lda.3*100,2)`% sur la base d'apprentissage.
+
+Pour cette répartition train/test l'erreur vient surtout de la confusion entre _versicolor_ et _virginica_. 
+
+On remarque que l'erreur du modèle dépend de la répartition aléatoire train/test.
+Comme la base Iris est de petite taille, il faut réitérer cette procédure ou estimer l'erreur par ré-échantillonnage pour une meilleure évaluation de la performance du LDA.
+
+## Analyse discriminante quadratique prédictive (ADQ) (librairie MASS)
+
+###QDA - 1ère répartition:
+```{r,echo=F}
+model.qda.2=qda(Species~.,data=iris[train.2,])
+#Prédiction sur Test:
+pred=predict(model.qda.2,iris[-train.2,])
+pred.class.qda.2=apply(pred$posterior,1,which.max)
+err.qda.2=sum(true.class.2!=pred.class.qda.2)/length(true.class.2)
+
+#Prédiction sur la base d'apprentissage:
+pred.train=predict(model.qda.2,iris[train.2,])
+err.train.qda.2=sum(as.numeric(iris[train.2,5])!=apply(pred.train$posterior,1,which.max))/length(train.2)
+
+```
+
+L'erreur sur la base de test est de `r round(err.qda.2*100,2)`% contre `r round(err.train.qda.2*100,2)`% sur la base d'apprentissage.
+
+###QDA - 2ème répartition:
+
+```{r,echo=F}
+model.qda.3=qda(Species~.,data=iris[train.3,])
+#Prédiction sur Test:
+pred=predict(model.qda.3,iris[-train.3,])
+pred.class.qda.3=apply(pred$posterior,1,which.max)
+err.qda.3=sum(true.class.3!=pred.class.qda.3)/length(true.class.3)
+
+#Prédiction sur la base d'apprentissage:
+pred.train=predict(model.qda.3,iris[train.3,])
+err.train.qda.3=sum(as.numeric(iris[train.3,5])!=apply(pred.train$posterior,1,which.max))/length(train.3)
+```
+
+L'erreur sur la base de test est de `r round(err.qda.3*100,2)`% contre `r round(err.train.qda.3*100,2)`% sur la base d'apprentissage.
+
+Pour mieux comparer LDA et QDA, on réitère 50 fois la procédure de répartition train/test:
+
+```{r,echo=F}
+err.qda=0
+err.train.qda=0
+err.lda=0
+err.train.lda=0
+
+for (ii in 1:50){
+  train=sample(nrow(iris),floor(nrow(iris)*.8))
+  model.lda=lda(Species~.,data=iris[train,])
+  model.qda=qda(Species~.,data=iris[train,])
+  
+  #Prédiction sur Test:
+  true.class=as.numeric(iris[-train,5])
+  pred=predict(model.lda,iris[-train,])
+  pred.class=apply(pred$posterior,1,which.max)
+  err.lda=err.lda+sum(true.class!=pred.class)/length(true.class)
+  
+  pred=predict(model.qda,iris[-train,])
+  pred.class=apply(pred$posterior,1,which.max)
+  err.qda=err.qda+sum(true.class!=pred.class)/length(true.class)
+  
+  #Prédiction sur la base d'apprentissage:
+  pred.train=predict(model.lda,iris[train,])
+  err.train.lda=err.train.lda+sum(as.numeric(iris[train,5])!=apply(pred.train$posterior,1,which.max))/length(train)
+  pred.train=predict(model.qda,iris[train,])
+  err.train.qda=err.train.qda+sum(as.numeric(iris[train,5])!=apply(pred.train$posterior,1,which.max))/length(train)
+}
+
+err.qda=err.qda/50
+err.train.qda=err.train.qda/50
+err.lda=err.lda/50
+err.train.lda=err.train.lda/50
+
+```
+
+- E(erreur-train(LDA))=`r signif(err.train.lda*100,3) `%
+
+- E(erreur-train(QDA))=`r signif(err.train.qda*100,3) `%
+
+- E(erreur-test(LDA))=`r signif(err.lda*100,3) `%
+
+- E(erreur-test(QDA))=`r signif(err.qda*100,3) `%
+
+On remarque que le QDA sur-apprend la base d'apprentissage et a donc une erreur sur la base de test légèrement supérieure à celle du LDA.
+
+
+#Régression logistique:
+
+```{r,echo=F}
+heart = read.table('SAheart.txt',header=T,sep=',');
+heart=heart[,-c(5,7)]
+```
+
+- sbp: pression systolique
+
+- tobacco: consommation de tabac cumulative
+
+- ldl: cholestérol
+
+- famhist: antécédents familiaux de problèmes cardiaques (catégorique)
+
+- obesity : obésité
+
+- alcohol: Consommation d'alcool
+
+- age: Age
+
+- chd: Présence de maladie coronarienne (cible)
+
+```{r,echo=F,fig.height=5}
+pairs(heart,pch=19,col=colors[3:4][heart$chd+1],cex=.5)
+model.glm=glm(chd~.,data=heart,family=binomial(link = "logit"))
+#summary(model.glm)
+```
+
+##Matrise de confusion - base d'apprentissage:
+
+```{r,echo=F,results='asis'}
+true.class=heart$chd
+pred.class=as.numeric(predict(model.glm,data=heart,type='response')>.5)
+confusion=table(true=true.class,pred=pred.class)
+rownames(confusion)=paste('true',rownames(confusion))
+colnames(confusion)=paste('pred',colnames(confusion))
+xtable(confusion,digits=c(0,0,2))
+```
+Le taux de faux positifs vaut `r signif(confusion[1,2]/sum(confusion[1,])*100,3)`%
+et le taux de faux négatifs `r signif(confusion[2,1]/sum(confusion[2,])*100,3)`%
+
+Ce modèle n'arrive pas à détecter plus de 48% de malades (faux négatifs), ce qui a le plus d'importance dans un contexte médical. Les faux positifs quant à eux, ne présentent pas autant de risque.
+
+##Validation croisée:
+
+```{r,echo=F,fig.height=3,fig.align='center'}
+K=50
+FPR.train=rep(0,K)
+FNR.train=rep(0,K)
+ERR.train=rep(0,K)
+
+FPR.test=rep(0,K)
+FNR.test=rep(0,K)
+ERR.test=rep(0,K)
+
+for (ii in 1:K){
+  train=sample(nrow(heart),floor(nrow(heart)*.75))
+  model.glm=glm(chd~.,data=heart[train,],family=binomial(link = "logit"))
+  
+  #Prédiction sur Test:
+  true.class=heart[-train,]$chd
+  pred.class=as.numeric(predict(model.glm,heart[-train,],type='response')>.5)
+  confusion=table(true=true.class,pred=pred.class)
+  FPR.test[ii]=confusion[1,2]/sum(confusion[1,])
+  FNR.test[ii]=confusion[2,1]/sum(confusion[2,])
+  ERR.test[ii]=sum(true.class!=pred.class)/length(true.class)
+  
+
+  #Prédiction sur la base d'apprentissage:
+  true.class=heart[train,]$chd
+  pred.class=as.numeric(predict(model.glm,heart[train,],type='response')>.5)
+  confusion=table(true=true.class,pred=pred.class)
+  FPR.train[ii]=confusion[1,2]/sum(confusion[1,])
+  FNR.train[ii]=confusion[2,1]/sum(confusion[2,])
+  ERR.train[ii]=sum(true.class!=pred.class)/length(true.class)
+}
+par(mfrow=c(1,3))
+bx=boxplot(FPR.train,main='Faux positifs - train')
+text(.7,bx$stats,round(bx$stats,2),font=2)
+bx=boxplot(FNR.train,main='Faux négatifs - train')
+text(.7,bx$stats,round(bx$stats,2),font=2)
+bx=boxplot(ERR.train,main='Erreur - train')
+text(.7,bx$stats,round(bx$stats,2),font=2)
+bx=boxplot(FPR.test,main='Faux positifs - test')
+text(.7,bx$stats,round(bx$stats,2),font=2)
+bx=boxplot(FNR.test,main='Faux négatifs - test')
+text(.7,bx$stats,round(bx$stats,2),font=2)
+bx=boxplot(ERR.test,main='Erreur - test')
+text(.7,bx$stats,round(bx$stats,2),font=2)
+
+```
+
+L'erreur moyenne sur la base de test (25%) est de `r signif(mean(ERR.test)*100,3)`%. Avec la réitération de la procédure de sélection de la base d'apprentissage/test on estime rigoureusement l'espérance de l'erreur et on peut également évaluer la stabilité de modèle via la variance de l'erreur.
+
+
+##Régression logistique avec sélection de variables:
+
+
+Avec _step_ dans les deux directions, les covariables les plus significatives sélectionnées dans l'ordre croissant d'importance sont: age -> famhist -> tobacco -> ldl. On conclut que l'âge et les antécédents familaux prédominent les covariables diététiques (tabac, alcool..)
+
+```{r,echo=F,results='asis'}
+null=glm(chd~1, data=heart,family=binomial(link = "logit"))
+full=glm(chd~., data=heart,family=binomial(link = "logit"))
+
+model.glm.step=step(null, scope=list(lower=null, upper=full),direction="both",trace=0)
+Coeffs=signif(as.matrix(summary(model.glm.step)$coefficients[,c(1,4)]),3);
+signif=rep("",nrow(Coeffs));
+signif[which(Coeffs[,2]<.1)]="\\textbullet";
+signif[which(Coeffs[,2]<.05)]="*";
+signif[which(Coeffs[,2]<.01)]="**";
+signif[which(Coeffs[,2]<.001)]="***";
+Coeffs=cbind(Coeffs,signif)
+print(xtable(Coeffs,align=rep("c",4),caption='Coefficients estimés du modèle sélectionné',digits = c(0,2,5,0),label="tab:coeffs"),sanitize.text.function=identity)
+```
+
+##Les courbes ROC:
+
+```{r,echo=F}
+set.seed(123)
+train=sample(nrow(heart),floor(nrow(heart)*.75))
+model1=glm(chd~.,data=heart[train,],family=binomial(link = "logit"))
+model2=glm(model.glm.step$formula,data=heart[train,],family=binomial(link = "logit")) 
+model3=glm(chd~age,data=heart[train,],family=binomial(link = "logit"))
+
+#Performance sur Test:
+true.class=heart[-train,]$chd
+pred=predict(model1,heart[-train,],type='response')
+perf.1=performance(prediction(pred,true.class),"tpr", "fpr")
+auc.1=unlist(performance(prediction(pred,true.class),"auc")@y.values)
+
+pred=predict(model2,heart[-train,],type='response')
+perf.2=performance(prediction(pred,true.class),"tpr", "fpr")
+auc.2=unlist(performance(prediction(pred,true.class),"auc")@y.values)
+
+pred=predict(model3,heart[-train,],type='response')
+perf.3=performance(prediction(pred,true.class),"tpr", "fpr")
+auc.3=unlist(performance(prediction(pred,true.class),"auc")@y.values)
+
+#Prédiction sur la base d'apprentissage:
+true.class=heart[train,]$chd
+pred=predict(model1,heart[train,],type='response')
+perf.train.1=performance(prediction(pred,true.class),"tpr", "fpr")
+auc.train.1=unlist(performance(prediction(pred,true.class),"auc")@y.values)
+
+pred=predict(model2,heart[train,],type='response')
+perf.train.2=performance(prediction(pred,true.class),"tpr", "fpr")
+auc.train.2=unlist(performance(prediction(pred,true.class),"auc")@y.values)
+
+
+pred=predict(model3,heart[train,],type='response')
+perf.train.3=performance(prediction(pred,true.class),"tpr", "fpr")
+auc.train.3=unlist(performance(prediction(pred,true.class),"auc")@y.values)
+
+par(mfrow=c(1,2));
+plot(perf.train.1, col=colors[1],main='ROC - train',lwd=2,xlab='Taux de faux positifs',ylab='Taux de vrais positifs',cex.main=.8)
+plot(perf.train.2, add=TRUE, col=colors[2],lwd=2)
+plot(perf.train.3, add=TRUE, col=colors[3],lwd=2)
+legend("bottomright",legend=paste(c('complet','step','var1'),'-auc=',round(c(auc.train.1,auc.train.2,auc.train.3),4)),col=colors[1:3],lty=1,lwd=2,cex=.6)
+
+plot(perf.1, col=colors[1],main='ROC - test',lwd=2,xlab='Taux de faux positifs',ylab='Taux de vrais positifs',cex.main=.8)
+plot(perf.2, add=TRUE, col=colors[2],lwd=2)
+plot(perf.3, add=TRUE, col=colors[3],lwd=2)
+legend("bottomright", legend=paste(c('complet','step','var1'),'-auc=',round(c(auc.1,auc.2,auc.3),4)),col=colors[1:3],lty=1,lwd=2,cex=.6)
+```
+
+On note que le sous-modèle (chd ~ age+famhist+tobacco+ld) a une performance très proche de celle du modèle complet sur la base d'apprentissage et arrive même à le surperformer sur la base de test ($+ `r signif(auc.2-auc.1,3)`$ de plus en ROC AUC).
+Le modèle _var1_ à une variable (chd ~ âge) n'est pas loin derrière et pourrait être suffisant selon l'usage. 

@@ -1,0 +1,132 @@
+\documentclass[10pt]{article}
+\input{preambule}
+
+
+\begin{document}
+\title{\huge\spacedallcaps{High Performance Computing}\\\large\spacedallcaps{Matrix factorization for recommender systems}}
+\author{\bfseries\large\spacedallcaps {Maha ELBAYAD}}
+\date{\today}
+\maketitle
+\section{Introduction}
+This project aims to build a recommender sysetm based on parallel matrix factorization. The data used is the one provided by Netflix for their famous challenge \href{http://www.netflixprize.com/}{(link)}.
+\subsection{The data}
+The Data is over 100 million ratings from 480 000
+randomly-chosen users of 18 000 movie titles.\\
+It can be downloaded from 
+
+\section{The Algorithm}
+Let us consider our Rating matrix:
+\[\mathbf R=\{r_{ij}\}_{\substack{1\leq i \leq n_u\\1\leq j \leq n_m}}\]
+Where $n_u$ is the total number of users and $n_m$ is the total number of movies.\\
+Some of the matrix $\mathbf R$ values are missing, and the objective is to estimate them based on the known ones.\\
+To reduce the problem dimensionality, we map each of the users and the movies into a new space of dimension $n_f$, hence we build two matrices:
+(1): The users matrix $\mathbf U=[u_i], \: \forall i\in \llbracket 1,n_u\rrbracket \: u_i\in \mathbb R^{n_f}$.\\
+(2): The movies matrix $\mathbf M=[m_i], \: \forall j\in \llbracket 1,n_m\rrbracket \: m_j\in \mathbb R^{n_f}$.\\
+Our prediction of the user i rating of movie j would be the dot product $(u_i|m_j)$.\\
+To build the matrices $\mathbf U$ and $\mathbf M$ we minimze a loss function $J$ on the known ratings.
+\[J(U,M)=\frac{1}{|K|}\sum\limits_{(i,j)\in K}(r_{ij}-(u_i|m_j))^2\]
+Where $K$ is the subset of known values $(i,j)$.\\
+To find $(\mathbf{U^*,M^*})=arg \min\limits{(U,M)} J(U,M)$ we use the Alternative Least Squares method (ALS):
+\begin{enumerate}[leftmargin=1cm, label=\alph *)]
+\item Initialize $\mathbf M$ by assigning the average rating for a movie to the first compenent of the corresponding column $m_j$, the rest are random small values.
+\item While fixing $\mathbf M$, solve $\mathbf U$ by minizing $J(U,M)$.
+\item While fixing $\mathbf U$ this time, we solve $\mathbf M$ by minimizing $J(U,M)$.
+\item We loop over the 2 previous steps until a stopping criterion is met.
+\end{enumerate}
+\subsection{Regularization}
+To avoid overfitting the training set and performing poorly on the unseen data, we add a regularizaion parameter to the cost function $J$ as follows:
+\[J(U,M)\propto \sum\limits_{(i,j)\in K}(r_{ij}-(u_i|m_j))^2+\lambda\big(\sum\limits_in_{u_i}||u_i||^2+\sum\limits_in_{m_i}||m_i||^2\big)\]
+Where $n_{u_i}, n_{m_i}$ are the total ratings for user $i$ and movie $i$ respectively.
+\subsection{Optimization problems}
+\subsubsection{Solving the Users matrix (step b):\label{upu}}
+\[\begin{split}
+\forall (k,i)\in\llbracket 1,n_f\rrbracket\times\llbracket 1,n_u\rrbracket, \:\frac{\partial J(\mathbf U,\mathbf M)}{\partial u_{ki}}=0 &\Rightarrow \forall (k,i), \: \sum\limits_{j \in K_i}((u_i|m_j)-r_{ij})m_{kj}+\lambda n_{u_i}u_{ki}\\
+&\Rightarrow \forall i,  \:  (M_{K_i}\times~^tM_{K_i}+\lambda n_{u_i}\mathbb I_{n_f})u_i=M_{K_i}\times ~^tR(i,K_i)\\
+&\Rightarrow \forall i,  \: u_i=(M_{K_i}\times~^tM_{K_i}+\lambda n_{u_i}\mathbb I_{n_f})^{-1}\times M_{K_i}\times~^tR(i,K_i).
+\end{split}\]
+Where:
+\begin{itemize}
+\item $K_i$ the subset of known rating from user i.
+\item $M_{K_i}$ is submatrix of M with only the columns $j\in K_i$.
+\item $R(i,K_i)$ the rating row of user i (of length $|K_i|$)
+\item $\mathbb I_{n_f}$ is an identity matrix of size $(n_f,n_f)$.
+\end{itemize}
+\subsubsection{Solving the Movies matrix (step c):\label{upm}}
+Similarly 
+\[
+\forall j\in\llbracket 1,n_m\rrbracket,\: m_j=(U_{K_j}\times~^tU_{K_j}+\lambda n_{m_j}\mathbb I_{n_f})^{-1}\times U_{K_j}\times~^tR(K_j,j).
+\]
+$R(K_j,j)$ is the rating column of movie j.
+\subsection{Parallelization}
+In a parallelized version of ALS, each processor (p) will handle a chunk of users and a chunk of movies.\\
+As seen in \ref{upu}, we only need the user i's ratings to update $u_i$, but we need to have the whole matrix $\mathbf M$ as $\cup_{i\in p}\:\{j\in K_i\}$ could possibly cover all the database movies. Similarly the processor responsible for updating $m_j$ will need the movie's rating and the whole matrix $\mathbf U$.
+
+\subsection{Data preprocessing}
+Since we have collected data on $4.8\times 10^5$ users and $1.7\times 10^4$ movies with only $10^6$ ratings, the matrix $\mathbf R$ is sparse and loading the whole $8.16\times 10^9$ potential values would take a tremendous time. Hence the need to choose a more appropriate data structure.\\
+We define a struct "Node" holding the movie and the user IDs plus the rating. The matrix $\mathbf R$ would be replaced by an array of "Nodes". We'll need two arrays, one sorted by users and a second one sorted by movies for efficient memeory access. Those two arrays would be assessed with 2 index arrays to tell the processor where in the large array to look for its assigned values.\\
+The 2 built arrays would then be writing into binary files for the processors to read Node objects directly.\\
+Each of the processors will contribute in building the movies metadata consistig of "Ratings count" and "Ratings average" per movie. The rating average of each movie would serve to initialize the matirx M.\\
+Besides, the users being chosen randombly from the netflix dataset we need to map them to $\llbracket 1 ,\text{Number of users}\rrbracket$ and save the mapping for the prediction phase. This shuffled mapping aims to recalibrate the ratings distribution among the proprocessors, since the first users in the dataset tend to have far more ratings than the following ones.\\
+While preparing the binary files I excluded some ratings and saved them for test since I couldn't find the test results used on the netflix challenge. This alternative is sufficient even if it dosen't allow comparing with other published performances.
+
+\subsection{The stopping criterion}
+We stop the alternating least squares whenever we consider the RMSE\footnote{RMSE for Roote Mean Square Error} ($=\sqrt{J(U,M)}$) has converged. For computational reasons we would estimate the RMSE only on a subset of the training set. In practice, the RMSE is said to have converged if its variation between two consecutive iterations is no more than a small value defined as tolerance (TOL) in the code.\\
+Each processor computes the residual sum of squares on a randomly\footnote{generated at the first iteration then maintained} chosen subset from its training set (the algorihtm has already seen these values). This local sum is then reduced by the MASTER processor to compute an overall RMSE and decide whether to continue updating the matrices or to break out of the loop.
+\subsection{Linear ALgebra}
+For all the opeartions on matrices I used BLAS and LAPACK namely:
+\begin{itemize}
+\item (BLAS)  dsyrk: multiplies a symmetric matrix by its transpose and adds a second matrix for computing $A=M_{K_i}\times~^tM_{K_i}+\lambda n_{u_i}\mathbb I_{n_f}$ and its equivalent for the users as well.
+\item (BLAS)  dgemv: Multiplies a matrix by a vector to compute $B=M_{K_i}\times ~^tR(i,K_i)$
+\item (LAPACK) dsysv: computes the solution to a real system of linear equations $A * X = B$, where A is an N-by-N symmetric matrix and $X$ and $B$ are vectors of length N. In our case X would be the new user/movie vector.
+\end{itemize}
+\subsection{Pseudocode}
+\begin{algorithm}[H]
+\DontPrintSemicolon
+{\large Preporcessing:}
+	\tcc{Used only once to build ratings list.}
+	\If{MASTER}{
+	\tcc{Sequentially processing the netflix data.}
+	Load training set and change users indexing.\;
+	Write binary file for ratings ordered by movie.\;
+	Reorder the ratings by user.\;
+	Write binary file for ratings ordered by user.\;
+	Write binary files for offsets on the two ratings files.\;
+	Write binary file for users mapping.\;
+	}
+{\large\bfseries Main ALS:}\;
+	\If{MASTER}{
+		Load the indices arrays.\;
+		Load the mapping array.\;
+		}
+	Broadcast(Movies Indices, Users indices and users mapping).\;
+	Each processor get assigned a part from the ratings files.\;
+	Read Ratings file with determined offset and length.\;
+	Build Movies Metadata\;
+	Initialize the corresponding part of M\;
+	Allgatherv(Movies Matrix M)\;
+	\While{$\Delta_i RMSE<TOL$}{
+		Update U.\;
+		Barrier.\;
+		Allgatherv U.\;
+		update M.\;
+		Barrier.\;
+		Allgatherv M.\;
+		Compute RMSE on follow-up subset.\;
+		}
+{\large Prediction:}\;
+	Allgatherv Movies Metadata \tcc{Useful to predict ratings for unseen users.}
+	Seek assigned part of the test set\;
+	Predict ratings and compare with true values to compute participation in the RMSE\;
+	Reduce the RMSE for printing output\;
+\end{algorithm}
+\section{Performance}
+With the actual code under LAMBDA=0.04, total iterations of around 25 and only 12 features, we get a RMSE of 0.98. The running time is still considerable with 19s for a single ALS iteration when using 5 processors.\\
+
+\begin{thebibliography}{9}
+\bibitem{CF} Zhou, Y., Wilkinson, D., Schreiber, R., \& Pan, R. (2008). \emph{Large-scale parallel collaborative filtering for the netflix prize}. In Algorithmic Aspects in Information and Management (pp. 337-348). Springer Berlin Heidelberg.
+
+\bibitem{OtherCF}Yu, H. F., Hsieh, C. J., \& Dhillon, I. (2012, December). \emph{Scalable coordinate descent approaches to parallel matrix factorization for recommender systems}. In Data Mining (ICDM), 2012 IEEE 12th International Conference on (pp. 765-774). IEEE.
+\end{thebibliography}
+
+
+\end{document}

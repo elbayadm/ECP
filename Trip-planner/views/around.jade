@@ -1,0 +1,40 @@
+//- profile.jade
+doctype html
+html(lang='en')
+    head
+        title  Around me
+        //- load bootstrap css
+        link(rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap.min.css")
+        //- Load fonts
+        link(rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.3.0/css/font-awesome.min.css")
+        link(rel="stylesheet" href="/stylesheets/mapstyle.css" )
+        //- JQuery
+        script(src="https://code.jquery.com/jquery-2.0.2.min.js")
+        link(rel="stylesheet" href="http://cdn.leafletjs.com/leaflet-0.4/leaflet.css")
+        style.
+            .btn-thumb{
+                margin-top: 3px;
+                margin-bottom: 3px;
+                height:75px;
+                text-align: center;
+                padding-top: 15px;
+                font-weight: 500;
+                font-size:28px;
+            }
+
+    body(style='padding-top:80px;')
+        //- Nav bar
+        nav.navbar.navbar-default.navbar-fixed-top
+            div.container-fluid
+                div.navbar-header
+                    a.navbar-brand(href="/profile")  
+                        i.fa.fa-user  Profile
+                div.navbar-right
+                    a.btn.btn-default.navbar-btn(href="/logout") Logout
+        //-Content
+        div.wrapper
+            div.app
+                div.loading
+                div.infobox(id="infobox")
+                div.map bla bla
+        script(src="/js/geoloc.js")

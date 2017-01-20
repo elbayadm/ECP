@@ -1,0 +1,214 @@
+
+
+------------------------------------------------------------------------------------------
+                        Lesson 3 :   Kolmogorov complexity
+------------------------------------------------------------------------------------------
+
+
+Introduction
+ . sequence completion : how?
+ . sequence probability? preference?
+ . sequence model?
+
+ Find a model for the following sequences:
+ . 0101010101010101010101010101010101010101010101010101010101010101  : repeat 01
+ . 0110101000001001111001100110011111110011101111001100100100001000  : srqt(2)-1 in binary writing!
+ . 1101111001110101111101101111101110101101111000101110010100111011  : too many 1s for uniform law --> encodeable in log n + n H(k/n)  [encode n,k first to describe k/n] or give its number in the set of all sequences with k 1 (see the method in the proof of the entropic bound later).
+
+ . english text + same text in german : if short, just compress both independently
+                                        if very long, encode how to translate english to german, and use that knowledge when decoding
+
+
+------------------------------------------------------------------------------------------
+
+I - Kolmogorov complexity
+-------------------------
+
+- Definition     [Cover&Thomas p 463]
+  . K(string s) = description cost of s = the length of the shortest program that can produce it
+    . unit: bits
+    . simple examples : 000000, first digits of pi
+  . associated proba : 2^-K(s)
+     => distribution over strings
+  . sums to 1? no, to Omega (Chaitin's constant) which is provably non-computable
+    . halting problem
+
+- Universality    [Cover&Thomas p 427]
+  . more or less Turing-machine-invariant
+    . universal Turing machine
+    . Church's thesis : all computational models are equivalent (if sufficiently complex)
+    . K_{computer 1}(s) <= K_{computer 2}(s) + C_{1,2}  for all strings s
+       by running a simulator of Computer 2 (of size with C_{1,2} bits) on Computer 1, and executing the program associated to K_{computer 2}(s).
+    . we'll always have  +constant  in all formulas bounding K(s)
+  . not dependent on encoding
+    . given two possible binary encodings f and g for data x (which is not binary)
+       K( g(x) ) <= K( f(x) ) + K( g o f^-1 )  (+c)
+  . these constants are small (<1MB) compared to possible big data size (GB, TB)
+    ==> Kolmogorov complexity really makes sense
+
+
+- Extensions (defined up to a multiplicative constant, as exp(something +/- c) ) 
+  . proba from Kolmogorov:  p(s) = 2^-K(s)
+  . version sum_{over all programs p that produce s} 2^-length(p) 
+  . version with probabilistic programs: sum_{all random programs p} 2^-|p| P(p outputs s)
+  . with distributions: sum_{all probability distributions mu} 2^-|mu| mu(x)
+  --> Proposition: these 4 distributions are equivalent (i.e. for all i,j, exists C, P_i <= C P_j)  [A.K. Zvonkin and L.A. Levin, 1970]
+  ==> named Solomonoff universal prior (for prediction)
+
+  . relative complexity K(s|z) when z is already available (no need to describe it): concept similar to mutual information, conditional entropy, etc.
+
+
+------------------------------------------------------------------------------------------
+
+II - Bounds
+-----------
+
+- Easy upper bounds
+  . K(s) <= length(s) + 2 log length(s) + c  :  program "print the following chain, of length [length(s)]: [s]"
+                   or + log + log log + log log log + ... + c  (cf previous lesson)
+    ==> associated laws over strings or over integers
+        . code 1: encoding length: log n + 2 log log n
+           => p(n) proportional to  2^{- log n - 2 log log n}  = 1/(n (log n)^2 )  
+           ==> its sum does converge indeed => this distribution can be normalized into a probability
+        . code 2: encoding length: log n + log log n + log log log n + ...
+           => p(n) prop to 1/(n log n log log n ...)
+           ==> converge or not? seems to be tight. Kraft says yes.
+        . note: code 3 corresponding to p(n) prop to 1/n? or 1/(n log n)? not possible because sum_n goes to the infinite.
+    . example of application: tax cheaters
+       . cheaters don't know information theory and pick all digits {0,1,..9} iid (uniform)
+       . while first digit is much more likely to be 1 with the previous laws
+
+  . K(s) <= |s| + K(|s|)  +c   (more general than above) [Note: "|s|" denotes "length(s)"]
+
+  . can't compress everything (doesn't fit):
+      number of strings s with K(s) <= n  is  1 + 2 + 2^2 + 2^3 + 2^4 +... + 2^n < 2^{n+1} 
+      because their programs (all different) have to be written in less than n bits (so: either 0 bit, either 1 bit, either 2... either n)
+       ==> not many strings are simple
+       . strings s s.t. K(s | |s|) > |s| are named algorithmically "random" by Kolmogorov (because no regularity)  [Note: Kolmogorov is also the mathematician who formalized probabilities and randomness the way we use them nowadays]
+       . infinite strings such that lim_{n-->infty} K(x1...xn|n) = 1 are called incompressible
+  . K(s) <= |zip(s)| + |unzip program|
+       ==> distance based on zip used to cluster files (text, MIDI files...) and it worked! (clusters by authors) 
+       . d(x,y) = max( K(x|y), K(y|x) ) / max( K(x), K(y) )
+       . Rudi Cilibrasi and Paul Vitanyi. Clustering by compression.
+  . If x in E (finite),  K(x) <= K(E) +  |^ log |E| ^|  +c
+  . Generalization: given a set X and a proba mu on it, 
+      K(x) <= K(mu) - log mu(x)   +c
+      ==> in machine learning: a model mu is good if this quantity is small  !!!
+
+
+- Kolmogorov complexity is non computable!!!
+  . see Gödel, Turing, halt problem: indecidability of the output of some programs (whether they halt, and if yes, what they output)
+  . cannot prove that K(x) > 1 MB, whatever x is
+    . Berry paradox : 
+       "The smallest number that cannot be described in less than 13 words"
+      that we will update into (see below):
+       "The [first x found] that cannot be described in less than [L] bits".
+    . paradoxal proof in two steps, by Chaitin : (Chaitin's incompleteness theorem, 1971)
+      Step 1: Proposition:
+        There exists a constant L s.t. it is not possible to prove the statement K(x) > L for any x.
+         Proof: pick L = 1 MB. Write a program which goes through all possible proofs and stops when finding a proof of K(x)>L (whatever x is), and prints that x. This program has length < L. If it stops and prints an x, that x can be described with this program... and K(x) < L. Contradiction! So this program never stops. And consequently there doesn't exist any proof of the form "K(x) > 1 MB" for any x.
+      Step 2: Theorem:
+    . Kolmogorov complexity is not computable
+        Proof: consider all integers between 1 and 2^{L+1}. There are only at most 2^{L+1}-1  programs of length <= L (we proved it earlier), so at least one of these integers n0 has K(n0) > L. If there existed a program able to compute the Kolmogorov complexity of any integer, by computing K(n0) one would prove K(n0) > L, contradiction! So such a program doesn't exist.
+
+  ==> not possible to have lower bounds on the Kolmogorov complexity of a [sufficiently complex] string (i.e. provided it's over 1MB).
+
+
+- Entropic bound  [Cover&Thomas p 473]
+  . cannot prove lower bound Kolmogorov for a given s  BUT  can prove lower bounds *on average*
+  . consider a proba distrib f over a set X
+  . H(X)  <=  E_{x~f^n}[ 1/n K(x) ]  <= H(X) + (|X|+1) log n / n   +c/n
+  . ==> lim_{n-->infty}  E_{x~f^n}[ 1/n K(x) ]  =  H(X)  !!!!   cannot do better than entropy (on average)
+
+  . Proof: 
+    . lower-bound:  K(s) is the length of an encoding (the code of s is the shortest program describing it) ==> Gibbs inequality ==> cannot be better than entropy  (KL >= 0)
+    . upper-bound: by explicit construction
+      . encode n: costs 2 log n
+      . count the number of each symbol of the alphabet in s : n_a, n_b, n_c... n_z
+      . encode them: costs  |X| log n  (X = the alphabet) (actually: |X|-1, as n_z is known: n_z = n - (n_a + n_b + ...))
+      . now: draw the list of all possible sequences of n characters which have exactly n_a 'a', n_b 'b', etc.
+      . this list has size <= 2^{n H( Bernouilli(n_a/n, n_b/n ...) )} 
+          --> because indeed,  C^n_k = (n k) <= 2^{ n H( Bernouilli(k/n) )}      using Stirling formula, or using sum_k (n k) p^k (1-p)^(n-k) = 1, with p = k/n and considering (n k) p^k (1-p)^(n-k) <= 1   (cf details in Cover&Thomas)
+      . so encoding our sequence within this list has complexity <= n H(X)   using Jensen
+      . total encoding cost: = what is written in the formula
+
+------------------------------------------------------------------------------------------
+
+III - MDL (Minimum Length Description)
+--------------------------------------
+
+
+- Definition
+  . general criterion for model selection
+      given a set X and a proba mu on it,   K(x) <= K(mu) - log mu(x)   +c
+      --> K(mu) : complexity of the model
+      --> - log mu(x) : likelihood  (how well the model fits the data)
+  . natural trade-off between model complexity and accuracy : cf Occam's razor
+  . deals naturally with overfit: encode the model as well
+  . examples:
+    . Dirac:  K(mu) = K(x); - log mu(x) = 0
+    . Gaussian distrib N(m,sigma) fitted to a cloud of points (x_i): - log mu(x) = sum_i |x_i - m|^2 +c
+      ==> choose m = mean of x_i  by solving the least square error problem (if neglecting K(m))
+
+
+- Instantiations
+  . AIC, BIC : approximation models for K(model)
+    . AIC : K(mu) = number of parameters of mu
+        Akaike Information Criterion (AIC) [1973].
+    . BIC : K(mu) = 1/2  number of parameters * log(number of observations)  
+        Bayesian Information Criterion (BIC) [Schwartz, 1978].
+          ==> justification next lesson (Fisher information)
+  . examples?
+
+
+- Restricted families of programs    [Ollivier/Bensadon p 25]
+  . K(s) = |zip(s)|
+  . combine naive generative models into a more complex one (cf course reinforcement learning)
+     --> Markov models 
+  . auto-encoder: the middle (smallest) layer is the data compressed
+  . programs on Turing machines --> restrict to finite automata : then Kolmogorov complexity computable
+
+
+------------------------------------------------------------------------------------------
+
+IV - Conclusion
+---------------
+
+MDL = very general principle, to formulate any machine learning problem
+
+Next time:
+- end of information theory (Fisher information)
+- beginning of reinforcement learning + projects
+
+
+------------------------------------------------------------------------------------------
+
+References
+----------
+
+Bensadon's thesis (Yann Ollivier's presentations) : Part I
+Cover & Thomas : Chapter 14 mainly, + Chapter 13 + 11.3
+
+------------------------------------------------------------------------------------------
+
+
+
+
+
+------------------------------------------------------------------------------------------
+                  Practical session 3 : finishing practical session 2
+------------------------------------------------------------------------------------------
+
+- don't forget to test all models learned by generating new text
+- Markov chains (formulas for entropy/cross-entropy, etc.)
+- note that entropy decreases when the order of the model increases (exercise: prove it mathematically)
+- how to deal with symbols not seen yet : consider a new probability : (1-epsilon) p_model + epsilon p_uniform 
+- how to choose epsilon above : by cross-validation!
+- draw on the same chart all entropies (cross-entropies), considering all models 
+- cluster the texts using Kullback-Leibler (= relative cross-entropy), with classes being languages, or authors, or styles or topics...
+
+
+
+
+
+
